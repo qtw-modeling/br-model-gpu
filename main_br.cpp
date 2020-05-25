@@ -26,16 +26,16 @@
 #include "CurrentS.hpp"
 
 // grid parameters
-#define SINGLE_CELL_MODEL
+//#define SINGLE_CELL_MODEL
 
-#define numSegmentsX 2 //10
-#define numSegmentsY 2 //10
+#define numSegmentsX 30 //10 // 31x31 cell --- is not enoght for reentry to "live" in the tussie sample; more cells are needed
+#define numSegmentsY 30 //10
 #define numPointsX (numSegmentsX + 1) // = numCells
 #define numPointsY (numSegmentsY + 1) // = numCells
 #define numPointsTotal (numPointsX * numPointsY)
 #define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
 #define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
-#define T (5000.) //(1000.) // old val: 500 // endtime (in ms)
+#define T (3500.) //(1000.) // old val: 500 // endtime (in ms)
 #define dt 0.005 // old val = 1e-4 // timestep (in ms)
 
 // model parameters
@@ -43,13 +43,13 @@
 #define VRest (-80.) // NOTE: there exists no resting potential for SA node
 
 #define APD0 (330.) // in (ms) // from Aliev-Panfilov model
-#define LongitudeStim (APD0)
-#define PeriodStim (LongitudeStim * 8.) // in (ms) //APD0
-#define c0 (0.1*1e-7) // concentration initial
+#define LongitudeStim (250.) /* the value (520) results in "smoothest" action potential */ // in (ms)
+#define PeriodStim (LongitudeStim * 2.) // in (ms) //APD0
+#define c0 (0.01*1e-7) // concentration initial
 
 // tissue parameters
-#define Dx 0. //(7e-2) //88e-3 //1e-3 //1e-3 // conductivity
-#define Dy 0. //(7e-2) //88e-3 //1e-3 //1e-3 // conductivity
+#define Dx (40e-3) // 30e-3 --- ok for reentry
+#define Dy (40e-3) // 30e-3 --- ok for reentry
 
 
 
@@ -105,114 +105,27 @@ int CalculateLinearCoordinate(int i, int j) {
 }
 
 
-// gating vars kinetic functions' definitions
-//////////////////////////////////////////////
-
-// CPU versions of functions
-
-real alpha_n_CPU(real V) {
-    return 0.01 * (V + 55.0) / (1.0 - exp(-(V + 55.0) / 10.0));
-}
-
-
-real beta_n_CPU(real V) {
-    return 0.125 * exp(-(V + 65.0) / 80.0);
-}
-
-
-real n_inf_CPU(real V) {
-    return alpha_n_CPU(V) / (alpha_n_CPU(V) + beta_n_CPU(V));
-}
-
-
-real alpha_m_CPU(real V) {
-    return 0.1*(V + 40.0)/(1.0 - exp(-(V + 40.0)/10.0));
-}
-
-
-real beta_m_CPU(real V) {
-    return 4.0*exp(-(V + 65.0) / 18.0);
-}
-
-
-real m_inf_CPU(real V) {
-    return alpha_m_CPU(V) / (alpha_m_CPU(V) + beta_m_CPU(V));
-}
-
-
-real alpha_h_CPU(real V) {
-    return 0.07*exp(-(V + 65.5) / 20.0);
-}
-
-
-real beta_h_CPU(real V) {
-    return 1.0 / (1.0 + exp(-(V + 35.5) / 10.0));
-}
-
-
-real h_inf_CPU(real V) {
-    return alpha_h_CPU(V) / (alpha_h_CPU(V) + beta_h_CPU(V));
-}
-
-
-// GPU versions of functions
-/*
-#pragma acc routine
-real alpha_n(real V) {
-    return 0.01 * (V + 55.0) / (1.0 - exp(-(V + 55.0) / 10.0));
-}
-
-#pragma acc routine
-real beta_n(real V) {
-    return 0.125 * exp(-(V + 65.0) / 80.0);
-}
-
-#pragma acc routine
-real n_inf(real V) {
-    return alpha_n(V) / (alpha_n(V) + beta_n(V));
-}
-*/
-/*
-#pragma acc routine
-real alpha_m(real V) {
-    return 0.1*(V + 40.0)/(1.0 - exp(-(V + 40.0)/10.0));
-}
-
-#pragma acc routine
-real beta_m(real V) {
-    return 4.0*exp(-(V + 65.0) / 18.0);
-}
-
-#pragma acc routine
-real m_inf(real V) {
-    return alpha_m(V) / (alpha_m(V) + beta_m(V));
-}
-
-#pragma acc routine
-real alpha_h(real V) {
-    return 0.07*exp(-(V + 65.5) / 20.0);
-}
-
-#pragma acc routine
-real beta_h(real V) {
-    return 1.0 / (1.0 + exp(-(V + 35.5) / 10.0));
-}
-
-#pragma acc routine
-real h_inf(real V) {
-    return alpha_h(V) / (alpha_h(V) + beta_h(V));
-}
-*/
 
 real FuncSinglePeriod(real t)
 {
     // We consider onlt t > 0! //
 
     if (t < PeriodStim / 2.)
-        return 0.;
+        return 0.; // first: no stimulation
     else
+        return 1.; // second: stimulation
+
+
+/*
+ // "__П__ " --- func looks like dis
+    if (t < 2./7.*PeriodStim || t > 4./7*PeriodStim)
+        return 0.;
+    else 
         return 1.;
+*/
+
 }
+
 
 real IsStim(real t)
 {
@@ -222,6 +135,18 @@ real IsStim(real t)
     // Periodic stimulation, with each stimulation's duration = LongitudeStim
     real offset = (int)(t / PeriodStim) * PeriodStim;
     return FuncSinglePeriod(t - offset);
+
+
+/*
+    // permanent stimulation
+    if (t > 400) // times in (ms): let 100 sec for transient, after this --- stimulate once
+        return 1.; // stim
+    else
+        return 0.; // no stim
+*/
+    
+
+
 
     //return 1.; // stimulus is always ON
 }
@@ -275,16 +200,16 @@ std::map<std::string, real> VviaPhase(real phase)
 
     // initial conditions: only for Old structs: New will be calculated in the loop
     Old->V = VRest;
-    Old->m = 0.067;                //m_inf_CPU(VRest); // 0.5
-    Old->h = 0.99; //h_inf_CPU(VRest); // 0.5
-    Old->J = 0.99;    // 0.1; // may be false; TODO perform calcs with higher T
-    Old->d = 0.01; //0.;
+    Old->m = 0.5;                //m_inf_CPU(VRest); // 0.5
+    Old->h = 0.5; //h_inf_CPU(VRest); // 0.5
+    Old->J = 0.5;    // 0.1; // may be false; TODO perform calcs with higher T
+    Old->d = 0.5; //0.;
     Old->f = 0.5; //1.;
-    Old->x = 0.01; // TODO: check this "initial condition" to result in a limit cycle
+    Old->x = 0.5; // TODO: check this "initial condition" to result in a limit cycle
     ConcentrationsOld->Ca = c0; // 0.1*1e-7; // random value
 
-#ifdef SINGLE_CELL_MODEL
     std::map<std::string, real> stateOfPhase;
+#ifdef SINGLE_CELL_MODEL
     stateOfPhase["V"] = Old->V;
     stateOfPhase["m"] = Old->m;
     stateOfPhase["h"] = Old->h;
@@ -318,7 +243,7 @@ std::map<std::string, real> VviaPhase(real phase)
 
 
     real THRESHOLD = -30.; // hardcoded for now
-    real tEndTransient = 3000.; // in ms
+    real tEndTransient = 100.; // in (ms)
     real time0; // random value
     real time1; // random value
     bool isThresholdFound = false;
@@ -350,7 +275,7 @@ std::map<std::string, real> VviaPhase(real phase)
                                  Old->V, Old->m, Old->h, Old->J, Old->d, Old->f, Old->x,
                                  (CurrentsOld->INa), (CurrentsOld->IK), (CurrentsOld->IX), 
                                  (CurrentsOld->IS), ConcentrationsOld->Ca)
-                                 + IsStim(tCurrent)*I_Stim(0, 0, 5.) ); // "standart" I_stim = 1e
+                                 + IsStim(tCurrent)*I_Stim(0, 0, 2.1) ); // "standart" I_stim = 1e
 
         // concentrations calc
         ConcentrationsNew->Ca = ConcentrationsOld->Ca + dt * (
@@ -417,12 +342,12 @@ std::map<std::string, real> VviaPhase(real phase)
 
     // (again) initial conditions: only for Old structs: New will be calculated in the loop
     Old->V = VRest;
-    Old->m = 0.067; //m_inf_CPU(VRest); // 0.5
-    Old->h = 0.99; //h_inf_CPU(VRest); // 0.5
-    Old->J = 0.99;    // 0.1; // may be false; TODO perform calcs with higher T
-    Old->d = 0.01;    //0.;
+    Old->m = 0.5; //m_inf_CPU(VRest); // 0.5
+    Old->h = 0.5; //h_inf_CPU(VRest); // 0.5
+    Old->J = 0.5;    // 0.1; // may be false; TODO perform calcs with higher T
+    Old->d = 0.5;    //0.;
     Old->f = 0.5;    //1.;
-    Old->x = 0.01;    // TODO: check this "initial condition" to result in a limit cycle
+    Old->x = 0.5;    // TODO: check this "initial condition" to result in a limit cycle
 
     ConcentrationsOld->Ca = c0; // rand value
 
@@ -467,7 +392,7 @@ std::map<std::string, real> VviaPhase(real phase)
                                  Old->V, Old->m, Old->h, Old->J, Old->d, Old->f, Old->x,
                                  (CurrentsOld->INa), (CurrentsOld->IK), (CurrentsOld->IX), 
                                  (CurrentsOld->IS), ConcentrationsOld->Ca)
-                                 + IsStim(tCurrent)*I_Stim(0, 0, 5.) ); // "standart" I_stim = 1e
+                                 + IsStim(tCurrent)*I_Stim(0, 0, 2.1) ); // "standart" I_stim = 1e
 
         // concentrations calc
         ConcentrationsNew->Ca = ConcentrationsOld->Ca + dt * (
@@ -715,9 +640,7 @@ int main() {
                     mNew[idxCenter] = m_inf(VOld[idxCenter]) + (mOld[idxCenter] - m_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_m(VOld[idxCenter]) + beta_m(VOld[idxCenter])));
 
-                    //nNew[idxCenter] = n_inf(VOld[idxCenter]) + (nOld[idxCenter] - n_inf(VOld[idxCenter]))
-                    //                                            * exp(-dt * (alpha_n(VOld[idxCenter]) + beta_n(VOld[idxCenter])));
-
+                    
                     hNew[idxCenter] = h_inf(VOld[idxCenter]) + (hOld[idxCenter] - h_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_h(VOld[idxCenter]) + beta_h(VOld[idxCenter])));
                     
@@ -748,21 +671,30 @@ int main() {
                      + dt / Cm * (
                             Dx  * (VOld[idxRight] - 2 * VOld[idxCenter] + VOld[idxLeft])
                             + Dy  * (VOld[idxUp] - 2 * VOld[idxCenter] + VOld[idxDown])
-                    );
+                                )
+                    + dt / Cm * (
+                                                        TotalIonCurrent(idxCenter, VOld[idxCenter], mOld[idxCenter],
+                                                             hOld[idxCenter], JOld[idxCenter], 
+                                                             dOld[idxCenter], fOld[idxCenter], xOld[idxCenter],
+                                                            INaOld, IKOld, IXOld, ISOld, concCaOld[idxCenter])
+                                                                        + 0.*IsStim(tCurrent)*I_Stim(i, j, 2.1)
+                                                ); // "standart" I_stim = 1e0;
+                    
                     
                     
                     // reaction step
-                    VNew[idxCenter] += dt / Cm * (
+                    /* VNew[idxCenter] +=  dt / Cm * (
                                                         TotalIonCurrent(idxCenter, VOld[idxCenter], mOld[idxCenter],
                                                              hOld[idxCenter], JOld[idxCenter], 
                                                              dOld[idxCenter], fOld[idxCenter], xOld[idxCenter],
                                                             INaOld, IKOld, IXOld, ISOld, concCaOld[idxCenter])
                                                                         + IsStim(tCurrent)*I_Stim(i, j, 5.)
                                                 ); // "standart" I_stim = 1e0;
-
+                    */
+                    
                     // concentrations calc
                     concCaNew[idxCenter] = concCaOld[idxCenter] + dt * (
-                                                            -1e-7*ISOld[idxCenter] 
+                                                            -1.*1e-7*ISOld[idxCenter] 
                                                             + 0.07*(1e-7 - concCaOld[idxCenter]) 
                                                             ); // index "0" --- for array of length 1
                     
@@ -801,7 +733,7 @@ int main() {
 	
 	} // acc kernels
     
-    if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
+    if ((stepNumber % 600) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
     { // output each 10 msec: 10/dt = 2000 (old val.)
         //if ( (stepNumber) % (int)(T/dt/500)  == 0 ) {
         #pragma acc update host(VOld[0:numPointsTotal])
@@ -821,7 +753,7 @@ int main() {
             for(const auto& variable: variables) {// variables repr "X"Old values
                 int outNumber = stepNumber;
                 
-                if ((variable.first.compare("V")) == 0) // output only "V"
+                if (variable.first.compare("V") == 0 ) // output only "V"
                 {
                 Write2VTK(variable.first, numPointsX, variable.second, hx, outNumber); // for now: numPointsX == numPointsY
                 //Write2VTK("V", numPointsX, variables["V"], hx, counterOutput); // for now: numPointsX == numPointsY

@@ -36,7 +36,7 @@ real f_inf(real V)
 // MAIN FUNC: CURRENT
 real CurrentS(real V, real d, real f, real concCa)
 {
-    // Calcium current, I_s
+    // Calcium current, IS
 
-    return 0.09 * d * f * (V + 82.3 /*66.18 // val from A.Tveito book */ + 13.0287 * log(concCa) );
+    return 0.09 * d * f * (V + 82.3  + 13.0287*log(concCa) );
 }
