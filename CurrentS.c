@@ -1,30 +1,32 @@
 #include "common.h"
 
+//const real SCALING = 2.;
+
 #pragma acc routine
 real alpha_d(real V)
 {
     // new gate var (if compared to YNI-model)
 
-    return AlphaGeneralForm(V, 0.095, -0.01, -5., 0., 0., -0.072, 1.);
+    return 2.*AlphaGeneralForm(V, 0.095, -0.01, -5., 0., 0., -0.072, 1.); // 2 --- stands for modified version by A. Winfree
 }
 
 #pragma acc routine
 real beta_d(real V)
 {
     // new gate var (if compared to YNI-model)
-    return AlphaGeneralForm(V, 0.07, -0.017, 44., 0., 0., 0.05, 1.);
+    return 2.*AlphaGeneralForm(V, 0.07, -0.017, 44., 0., 0., 0.05, 1.);
 }
 
 #pragma acc routine
 real alpha_f(real V)
 {
-    return AlphaGeneralForm(V, 0.012, -0.008, 28., 0., 0., 0.15, 1.);
+    return 2.*AlphaGeneralForm(V, 0.012, -0.008, 28., 0., 0., 0.15, 1.);
 }
 
 #pragma acc routine
 real beta_f(real V)
 {
-    return AlphaGeneralForm(V, 0.0065, -0.02, 30., 0., 0., -0.2, 1.);
+    return 2.*AlphaGeneralForm(V, 0.0065, -0.02, 30., 0., 0., -0.2, 1.);
 }
 
 #pragma acc routine
