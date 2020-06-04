@@ -28,14 +28,14 @@
 // grid parameters
 //#define SINGLE_CELL_MODEL
 
-#define numSegmentsX 100 //10 // 31x31 cell --- is not enoght for reentry to "live" in the tussie sample; more cells are needed
-#define numSegmentsY 100 //10
-#define numPointsX (numSegmentsX + 1) // = numCells
-#define numPointsY (numSegmentsY + 1) // = numCells
-#define numPointsTotal (numPointsX * numPointsY)
+//#define numSegmentsX 20 //10 // 31x31 cell --- is not enoght for reentry to "live" in the tussie sample; more cells are needed
+//#define numSegmentsY 20 //10
+//#define numPointsX (numSegmentsX + 1) // = numCells
+//#define numPointsY (numSegmentsY + 1) // = numCells
+//#define numPointsTotal (numPointsX * numPointsY)
 #define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
 #define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
-#define T (6000.) //(1000.) // old val: 500 // endtime (in ms)
+#define T (30.) //(1000.) // old val: 500 // endtime (in ms)
 #define dt 0.005 // old val = 1e-4 // timestep (in ms)
 
 // model parameters
@@ -130,12 +130,12 @@ void Write2VTK(const int n, real* p, const real h, const int step)
 }
 
 
-int CalculateLinearCoordinate_CPU(int i, int j) {
+int CalculateLinearCoordinate_CPU(int i, int j, int numPointsX) {
     return i + j*numPointsX;
 }
 
 #pragma acc routine
-int CalculateLinearCoordinate(int i, int j) {
+int CalculateLinearCoordinate(int i, int j, int numPointsX) {
     return i + j*numPointsX;
 }
 
@@ -473,7 +473,7 @@ real* VviaPhase(real phase)
 
 // we use big "J" for denoting gate var "j": letter "j" is used as a counter in the loops below
 void SetInitialConditions_CPU(real* V, real* m, real* h, real* J, real* d, 
-real* f, real* x, real* concCa, real value) {
+real* f, real* x, real* concCa, real value, int numPointsX, int numPointsY) {
     int idx;
     //std::srand(unsigned(1.)); // initial seed for random number generator
     real randomNumber;
@@ -486,7 +486,7 @@ real* f, real* x, real* concCa, real value) {
     for (int j = 0; j < numPointsY; j++)
         for (int i = 0; i < numPointsX; i++) {
 
-            int idxCenter = CalculateLinearCoordinate_CPU(i, j);
+            int idxCenter = CalculateLinearCoordinate_CPU(i, j, numPointsX);
             //randomNumber =  ((real)(std::rand() % 20))/20.; // 4phase setting
 
             // the borders: Dirichlet boundary conditions
@@ -518,23 +518,23 @@ real* f, real* x, real* concCa, real value) {
                 // TODO //////////////////////////////////////////////////////////////
 
                 // the func returns a std::map of all the vars' values
-                /* std::map<std::string, real> */ real* stateForPhase = VviaPhase(phase);
+                ///* std::map<std::string, real> */ real* stateForPhase = VviaPhase(phase);
 
                 //printf("Phase: %.2f deg., VOfPhase = %.2f\n", phase*180./M_PI, stateForPhase["V"]);
                 //std::cin.get();
 
-                V[idxCenter] = stateForPhase[V_];  //VviaPhase(phase); //M_PI/12. //VRest;
-                m[idxCenter] = stateForPhase[m_]; //0.067;//m_inf_CPU(VRest); // 0.5
-                h[idxCenter] = stateForPhase[h_]; //0.999; //h_inf_CPU(VRest); // 0.5
-                J[idxCenter] = stateForPhase[J_]; //0.;// 0.1; // may be false; TODO perform calcs with higher T 
-                d[idxCenter] = stateForPhase[d_]; //0.; //0.;
-                f[idxCenter] = stateForPhase[f_]; //1.; //1.;
-                x[idxCenter] = stateForPhase[x_];
-                concCa[idxCenter] = stateForPhase[concCa_];
+                V[idxCenter] = -60.; //stateForPhase[V_];  //VviaPhase(phase); //M_PI/12. //VRest;
+                m[idxCenter] =  0.5; //stateForPhase[m_]; //0.067;//m_inf_CPU(VRest); // 0.5
+                h[idxCenter] = 0.5; //stateForPhase[h_]; //0.999; //h_inf_CPU(VRest); // 0.5
+                J[idxCenter] = 0.5; //stateForPhase[J_]; //0.;// 0.1; // may be false; TODO perform calcs with higher T 
+                d[idxCenter] = 0.5; //stateForPhase[d_]; //0.; //0.;
+                f[idxCenter] = 0.5; //stateForPhase[f_]; //1.; //1.;
+                x[idxCenter] = 0.5; //stateForPhase[x_];
+                concCa[idxCenter] = 3e-7; //stateForPhase[concCa_];
 
                 // for progress checking: in percents
                 printf("Set. initial cond: %.2f percent completed\n", 
-                        100.*idxCenter / CalculateLinearCoordinate_CPU(numSegmentsX, numSegmentsY));
+                        100.*idxCenter / CalculateLinearCoordinate_CPU(numPointsX - 1, numPointsY - 1, numPointsX));
             }
 
     // after filling the whole area: "fill" borders wiht Neumann boundary cond.
@@ -542,21 +542,21 @@ real* f, real* x, real* concCa, real value) {
     for (int j = 0; j < numPointsY; j++)
         for (int i = 0; i < numPointsX; i++)
         {
-            int idxCenter = CalculateLinearCoordinate_CPU(i, j);
+            int idxCenter = CalculateLinearCoordinate_CPU(i, j, numPointsX);
             
             // borrder cells, including corner cells
-            if (i == 0 || j == 0 || i == (numSegmentsX) || j == (numSegmentsY))
+            if (i == 0 || j == 0 || i == (numPointsX - 1) || j == (numPointsY - 1))
             {
                 int idxNear;
 
                 if ((i == 0)) //&& (j >= 1) && (j <= numSegmentsY - 1)) // left border, except for corner cells
-                    idxNear = CalculateLinearCoordinate_CPU(i + 1, j);
+                    idxNear = CalculateLinearCoordinate_CPU(i + 1, j, numPointsX);
                 if ((j == 0)) //&& (i >= 1) && (i <= numSegmentsX - 1)) // bottom, except for corner cells
-                    idxNear = CalculateLinearCoordinate_CPU(i, j + 1);
-                if ((j == numSegmentsY)) // && (i >= 1) && (i <= numSegmentsX - 1)) // top, except for corner cells
-                    idxNear = CalculateLinearCoordinate_CPU(i, j - 1);
-                if ((i == numSegmentsX)) // && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
-                    idxNear = CalculateLinearCoordinate_CPU(i - 1, j);
+                    idxNear = CalculateLinearCoordinate_CPU(i, j + 1, numPointsX);
+                if ((j == numPointsY - 1)) // && (i >= 1) && (i <= numSegmentsX - 1)) // top, except for corner cells
+                    idxNear = CalculateLinearCoordinate_CPU(i, j - 1, numPointsX);
+                if ((i == numPointsX - 1)) // && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
+                    idxNear = CalculateLinearCoordinate_CPU(i - 1, j, numPointsX);
 
                 // what about corner cells? for now, they are not treated (?)
                 V[idxCenter] = V[idxNear];
@@ -574,10 +574,24 @@ real* f, real* x, real* concCa, real value) {
 
 
 
-int main() {
+int main(int argc, char** argv) {
 
     // setting a GPU for the computations; NOTE: req "openacc.h"!
     //acc_set_device_num(1, acc_device_nvidia);
+
+    // reading the params from the console
+    int numSegmentsX = atoi(argv[1]);
+    int numSegmentsY = atoi(argv[2]);
+    //int serieOfLaunchesNum = atoi(argv[3]);
+    
+    // storing output file's name in char[]
+    /* string */ char tmp_output_file[256];
+    sprintf(tmp_output_file, argv[3]); 
+    
+    int numPointsX = numSegmentsX + 1;
+    int numPointsY = numSegmentsY + 1;
+
+    int numPointsTotal = numPointsX * numPointsY;
 
     // allocating memory
     
@@ -642,7 +656,7 @@ int main() {
 
 
     // initializing before timesteppin'
-    SetInitialConditions_CPU(VOld, mOld, hOld, JOld, dOld, fOld, xOld, concCaOld, 0.);
+    SetInitialConditions_CPU(VOld, mOld, hOld, JOld, dOld, fOld, xOld, concCaOld, 0., numPointsX, numPointsY);
     //SetInitialConditions_CPU(VNew, mNew, hNew, JNew, dNew, fNew, xNew, 0.); // for avoiding "junk" values in all '...New' arrays
 
     real tCurrent = 0.;
@@ -667,8 +681,9 @@ deviceptr(tmp, tmpConc)
     {
 
         // TODO: change order of indexing (i, j)
-        
-	#pragma acc kernels \
+    
+    // dont forget to try "kernels" keyword
+	#pragma acc parallel \
 	present(VOld[0:numPointsTotal], mOld[0:numPointsTotal], hOld[0:numPointsTotal], \
     JOld[0:numPointsTotal], dOld[0:numPointsTotal], fOld[0:numPointsTotal], xOld[0:numPointsTotal], \
     concCaOld[0:numPointsTotal], \
@@ -682,16 +697,16 @@ deviceptr(tmp, tmpConc)
             for (int i = 0; i < numPointsX; i++) 
             {
 
-                int idxCenter = CalculateLinearCoordinate(i, j);
+                int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
                 
                 // inner cells
                 if (i >= 1 && j >= 1 && i <= (numSegmentsX - 1) && j <= (numSegmentsY - 1))
                 {
                     // for short names
-                    int idxUp = CalculateLinearCoordinate(i, j + 1);
-                    int idxDown = CalculateLinearCoordinate(i, j - 1);
-                    int idxLeft = CalculateLinearCoordinate(i - 1, j);
-                    int idxRight = CalculateLinearCoordinate(i + 1, j);
+                    int idxUp = CalculateLinearCoordinate(i, j + 1, numPointsX);
+                    int idxDown = CalculateLinearCoordinate(i, j - 1, numPointsX);
+                    int idxLeft = CalculateLinearCoordinate(i - 1, j, numPointsX);
+                    int idxRight = CalculateLinearCoordinate(i + 1, j, numPointsX);
 
                     
                     ///////////////// gating variables: ode ("reaction") step
@@ -766,13 +781,13 @@ deviceptr(tmp, tmpConc)
                     int idxNear;
                     
                     if ((i == 0) && (j >= 1) && (j <= numSegmentsY - 1)) // left border, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i + 1, j);
+                        idxNear = CalculateLinearCoordinate(i + 1, j, numPointsX);
                     else if ((j == 0) && (i >= 1) && (i <= numSegmentsX - 1)) // bottom, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i, j + 1);
+                        idxNear = CalculateLinearCoordinate(i, j + 1, numPointsX);
                     else if ((j == numSegmentsY) && (i >= 1) && (i <= numSegmentsX - 1)) // top, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i, j - 1);
+                        idxNear = CalculateLinearCoordinate(i, j - 1, numPointsX);
                     else if ((i == numSegmentsX) && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i - 1, j);
+                        idxNear = CalculateLinearCoordinate(i - 1, j, numPointsX);
                     else { // if corner cell
                         continue; // do nothing, continue the "i,j" loop
                     }
@@ -849,8 +864,13 @@ deviceptr(tmp, tmpConc)
 
 } // acc data
 
-    printf("\nCalculations finished. Elapsed time = %.2e sec\n", ((real)(clock() - start))/CLOCKS_PER_SEC);
+    real elapsedTime = (real)( ((real)(clock() - start))/CLOCKS_PER_SEC );
+    printf("\nCalculations finished. Elapsed time = %.2e sec\n", elapsedTime);
 
+    // printing elapsed time into a file
+    FILE* ff = fopen(tmp_output_file, "w");
+    fprintf(ff, "%.2f", elapsedTime);
+    fclose(ff);
     
     // cleaning up
     free(VOld);
