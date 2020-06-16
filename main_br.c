@@ -20,6 +20,7 @@
 //typedef double real;
 #include "common.h" // one for all includes
 #include "state.h"
+#include "extra.h"
 #include "CurrentNa.h"
 #include "CurrentK.h"
 #include "CurrentX.h"
@@ -35,7 +36,7 @@
 //#define numPointsTotal (numPointsX * numPointsY)
 #define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
 #define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
-#define T (30.) //(1000.) // old val: 500 // endtime (in ms)
+#define T (2000.) //(1000.) // old val: 500 // endtime (in ms)
 #define dt 0.005 // old val = 1e-4 // timestep (in ms)
 
 // model parameters
@@ -239,244 +240,68 @@ real TimeViaPhase(real phase_, real Period_, real t0_)
     
 }
 
+
+
+
 // phase calculations
-real* VviaPhase(real phase) 
+real* CalculateStateFromFile(real phase) 
 {
-    // we dont need to perform memalloc for members within these structs
-    struct State* Old = (struct State*)malloc(sizeof(struct State));
-    struct State* New = (struct State*)malloc(sizeof(struct State));
-    struct Concentrations* ConcentrationsOld = (struct Concentrations*)malloc(sizeof(struct Concentrations));
-    struct Concentrations* ConcentrationsNew = (struct Concentrations*)malloc(sizeof(struct Concentrations)); //new Concentrations;
-
-    // initial conditions: only for Old structs: New will be calculated in the loop
-    Old->V = VRest;
-    Old->m = 0.5;                //m_inf_CPU(VRest); // 0.5
-    Old->h = 0.5; //h_inf_CPU(VRest); // 0.5
-    Old->J = 0.5;    // 0.1; // may be false; TODO perform calcs with higher T
-    Old->d = 0.5; //0.;
-    Old->f = 0.5; //1.;
-    Old->x = 0.5; // TODO: check this "initial condition" to result in a limit cycle
-    ConcentrationsOld->Ca = c0; // 0.1*1e-7; // random value
-
-    //std::map<std::string, real> stateOfPhase;
-    real* stateOfPhase = MemAlloc(8); // 8 --- number of vars., wiht currents excluded
-#ifdef SINGLE_CELL_MODEL
-    stateOfPhase["V"] = Old->V;
-    stateOfPhase["m"] = Old->m;
-    stateOfPhase["h"] = Old->h;
-    stateOfPhase["J"] = Old->J;
-    stateOfPhase["d"] = Old->d;
-    stateOfPhase["f"] = Old->f;
-    stateOfPhase["x"] = Old->x;
-    stateOfPhase["concCa"] = ConcentrationsOld->Ca;
-    return stateOfPhase;
-#endif
-
-
-    // ...but here --- YES
-    struct Currents* CurrentsOld = (struct Currents*)malloc(sizeof(struct Currents)); //new Currents;
     
-    // ??? maybe we dont need CurrentsNew??? we are not swapping OLD and NEW
-    struct Currents* CurrentsNew = (struct Currents*)malloc(sizeof(struct Currents));
-    // dont forget to memalloc pointers within Currents struct;
-    // we use only single cell
-    CurrentsOld->INa = (real*)malloc(sizeof(real)); //new real[1];
-    CurrentsOld->IK = (real*)malloc(sizeof(real)); //new real[1];
-    CurrentsOld->IX = (real*)malloc(sizeof(real)); //new real[1];
-    CurrentsOld->IS = (real*)malloc(sizeof(real)); //new real[1];
+    FILE* fp;
+    /* открытие для чтения */
+    if( (fp = fopen("phase_data_br_model.bin", "rb")) == NULL) 
+    {
+        printf("Cannot open file");
+        exit(1);
+    }
+
+    real phaseLocalOld, phaseLocalNew;
+    real* stateOfPhaseOld = (real*)malloc(8*sizeof(real));
+    real* stateOfPhaseNew = (real*)malloc(8*sizeof(real));
+    real* stateOfPhaseFinal = (real*)malloc(8*sizeof(real));
+    real* tmp; // 4switching "timelayers"
+
+    // setting "initial conditions"
+    fread(&phaseLocalOld, sizeof(real), 1, fp);
+    /* reading the whole array in one step */
+    fread(stateOfPhaseOld, 8*sizeof(real), 1, fp);
     
-    // ...same for "New" struct here
-    CurrentsNew->INa = (real*)malloc(sizeof(real)); //new real[1];
-    CurrentsNew->IK = (real*)malloc(sizeof(real)); //new real[1];
-    CurrentsNew->IX = (real*)malloc(sizeof(real)); //new real[1];
-    CurrentsNew->IS = (real*)malloc(sizeof(real)); //new real[1];
-
-
-
-    real THRESHOLD = -30.; // hardcoded for now
-    real tEndTransient = 100.; // in (ms)
-    real time0; // random value
-    real time1; // random value
-    bool isThresholdFound = false;
-
-    real tCurrent = 0;
-    int counter = 0;
-    // TODO:
-    // main loop: timestepping
+    // going over all data in the bin file
     while (1)
     {
-
-        ///////////////// gating variables: ode ("reaction") step
-        // TODO: make only ONE read of Old->V, etc. from memory; to more speedup, esp. for GPU
-        New->m = m_inf(Old->V) + (Old->m - m_inf(Old->V)) * exp(-dt * (alpha_m(Old->V) + beta_m(Old->V)));
-
-                    
-        New->h = h_inf(Old->V) + (Old->h - h_inf(Old->V)) * exp(-dt * (alpha_h(Old->V) + beta_h(Old->V)));
         
-        New->J = j_inf(Old->V) + (Old->J - j_inf(Old->V)) * exp(-dt * (alpha_j(Old->V) + beta_j(Old->V)));
-
-        New->d = d_inf(Old->V) + (Old->d - d_inf(Old->V)) * exp(-dt * (alpha_d(Old->V) + beta_d(Old->V)));
-
-        New->f = f_inf(Old->V) + (Old->f - f_inf(Old->V)) * exp(-dt * (alpha_f(Old->V) + beta_f(Old->V)));
-
-        New->x = x_inf(Old->V) + (Old->x - x_inf(Old->V)) * exp(-dt * (alpha_x(Old->V) + beta_x(Old->V)));
-
-        // membrane potential calc                  
-        New->V = Old->V + dt / Cm * ( TotalIonCurrent_CPU(0 /* 0 --- index, stands for the single cell model */ , 
-                                 Old->V, Old->m, Old->h, Old->J, Old->d, Old->f, Old->x,
-                                 (CurrentsOld->INa), (CurrentsOld->IK), (CurrentsOld->IX), 
-                                 (CurrentsOld->IS), ConcentrationsOld->Ca)
-                                 + IsStim(tCurrent)*I_Stim(0, 0, 2.1) ); // "standart" I_stim = 1e
-
-        // concentrations calc
-        ConcentrationsNew->Ca = ConcentrationsOld->Ca + dt * (
-                                                            -1e-7*CurrentsOld->IS[0] 
-                                                            + 0.07*(1e-7 - ConcentrationsOld->Ca) 
-                                                            ); // index "0" --- for array of length 1
+        fread(&phaseLocalNew, sizeof(real), 1, fp);
+        /* reading the whole array in one step */
+        fread(stateOfPhaseNew, 8*sizeof(real), 1, fp);
         
-        // when threshold is found
-        if ((tCurrent >= tEndTransient) && (New->V > THRESHOLD) && (Old->V < THRESHOLD))
+        if (phaseLocalNew >= phase)
         {
-            // when 2nd threshold time (t1) is found: set t1 and then exit the loop
-            if (isThresholdFound == true)
-            {
-
-                //printf("Iteration #%d; V_membrane: %.2f\n", counter, Old->V);
-                //DEBUG();
-                time1 = tCurrent; // nearest-neighbour interpolaion; change to linear!
-                break;            // phase(V)
-            }
-            else // when threshold time (t0) is found: set t0
-            {
-                //printf("Iteration #%d; V_membrane: %.2f\n", counter, Old->V);
-                //DEBUG();
-                time0 = tCurrent; // nearest-neighbour interpolaion; change to linear!
-                isThresholdFound = true;
-                //return ; // phase(V)
-            }
-
+            //break; // stands for right-neighbour interpolation, since we have "passed" over "phase"
+            
+            // using linear interpolation
+            for (int ii = 0; ii <= 7; ii++)
+                stateOfPhaseFinal[ii] = CalculateLinearInterpolate(phase, phaseLocalOld, phaseLocalNew, stateOfPhaseOld[ii], stateOfPhaseNew[ii]);
+        
+            break;
         }
 
+        tmp = stateOfPhaseOld; stateOfPhaseOld = stateOfPhaseNew; stateOfPhaseNew = tmp;
         
-        tCurrent += dt;
-        counter += 1;
 
-        // swapping time layers
-        struct State* tmp;
-        tmp = Old; Old = New; New = tmp;
-
-        struct Concentrations* tmpConc; // for swapping CONCENTRATIONS-type structs
-        tmpConc = ConcentrationsOld; ConcentrationsOld = ConcentrationsNew; ConcentrationsNew = tmpConc;
-
-        //printf("Iteration #%d; V_membrane: %.2f\n", counter, Old->V);
-        //DEBUG();
-
-    } // while
-
-    //printf("t0 = %.2f, t1 = %.2f\n", time0, time1);
-    //std::cin.get();
-
-    // set vars, calculated within the loop
-    real period = (time1 - time0);//*0.5; // period of oscillations; remove "0.5" when period calc bug is found!
-    //printf("First loop is finished; period of oscillations: %.2f ms\n", period);
+    }
     
+    fclose(fp);
     
-    // repeat the loop (calculations) again and find V(phi)
-    tCurrent = 0; // again
-    
-    real tOfPhase = TimeViaPhase(phase, period, time0);
-    //printf("Phase: %.2f, tOfPhase: %.2f\n", phase, tOfPhase);
-    //std::cin.get();
-
-    //real VOfPhase; // to be determined in the loop below
-    //std::map<std::string, real> stateOfPhase;
-
-    // (again) initial conditions: only for Old structs: New will be calculated in the loop
-    Old->V = VRest;
-    Old->m = 0.5; //m_inf_CPU(VRest); // 0.5
-    Old->h = 0.5; //h_inf_CPU(VRest); // 0.5
-    Old->J = 0.5;    // 0.1; // may be false; TODO perform calcs with higher T
-    Old->d = 0.5;    //0.;
-    Old->f = 0.5;    //1.;
-    Old->x = 0.5;    // TODO: check this "initial condition" to result in a limit cycle
-
-    ConcentrationsOld->Ca = c0; // rand value
-
-
-    // (again): main loop: timestepping
-    while (1)
-    {
-        // it means, dat we found the moment of time, corresponding to the phase value
-        if (tCurrent >= tOfPhase)
-        {    
-            //VOfPhase = Old->V; // nearest-neighbour iterpolation; change to linear!
-            stateOfPhase[V_] = Old->V;
-            stateOfPhase[m_] = Old->m;
-            stateOfPhase[h_] = Old->h;
-            stateOfPhase[J_] = Old->J;
-            stateOfPhase[d_] = Old->d;
-            stateOfPhase[f_] = Old->f;
-            stateOfPhase[x_] = Old->x;
-            stateOfPhase[concCa_] = ConcentrationsOld->Ca;
-            
-            break; // exit the loop when found required t of phase
-            
-        }
-
-        ///////////////// gating variables: ode ("reaction") step
-        // TODO: make only ONE read of Old->V, etc. from memory; to more speedup, esp. for GPU
-        New->m = m_inf(Old->V) + (Old->m - m_inf(Old->V)) * exp(-dt * (alpha_m(Old->V) + beta_m(Old->V)));
-
-                    
-        New->h = h_inf(Old->V) + (Old->h - h_inf(Old->V)) * exp(-dt * (alpha_h(Old->V) + beta_h(Old->V)));
-        
-        New->J = j_inf(Old->V) + (Old->J - j_inf(Old->V)) * exp(-dt * (alpha_j(Old->V) + beta_j(Old->V)));
-
-        New->d = d_inf(Old->V) + (Old->d - d_inf(Old->V)) * exp(-dt * (alpha_d(Old->V) + beta_d(Old->V)));
-
-        New->f = f_inf(Old->V) + (Old->f - f_inf(Old->V)) * exp(-dt * (alpha_f(Old->V) + beta_f(Old->V)));
-
-        New->x = x_inf(Old->V) + (Old->x - x_inf(Old->V)) * exp(-dt * (alpha_x(Old->V) + beta_x(Old->V)));
-
-        // membrane potential calc                  
-        New->V = Old->V + dt / Cm * ( TotalIonCurrent_CPU(0 /* 0 --- index, stands for the single cell model */ , 
-                                 Old->V, Old->m, Old->h, Old->J, Old->d, Old->f, Old->x,
-                                 (CurrentsOld->INa), (CurrentsOld->IK), (CurrentsOld->IX), 
-                                 (CurrentsOld->IS), ConcentrationsOld->Ca)
-                                 + IsStim(tCurrent)*I_Stim(0, 0, 2.1) ); // "standart" I_stim = 1e
-
-        // concentrations calc
-        ConcentrationsNew->Ca = ConcentrationsOld->Ca + dt * (
-                                                            -1e-7*CurrentsOld->IS[0] 
-                                                            + 0.07*(1e-7 - ConcentrationsOld->Ca) 
-                                                            ); // index "0" --- for array of length 1
-
-        tCurrent += dt;
-        //stepNumber += 1;
-
-        // swapping time layers
-        struct State* tmp;
-        tmp = Old; Old = New; New = tmp;
-
-        struct Concentrations* tmpConc; // for swapping CONCENTRATIONS-type structs
-        tmpConc = ConcentrationsOld; ConcentrationsOld = ConcentrationsNew; ConcentrationsNew = tmpConc;
-
-
-    } // while
-
-    //printf("Second loop is finished; VOfPhase: %.1f mV\n", VOfPhase);
-    //std::cin.get();
-    // "return" --- is within the loop (look up)
-    return stateOfPhase;
+    return stateOfPhaseFinal;
 }
 
 
-// we use big "J" for denoting gate var "j": letter "j" is used as a counter in the loops below
-void SetInitialConditions_CPU(real* V, real* m, real* h, real* J, real* d, 
-real* f, real* x, real* concCa, real value, int numPointsX, int numPointsY) {
+void SetInitialConditions_CPU(real* V, real* m, real* h, real* J, real* d, real* f, 
+real* x, real* concCa, real value, int numPointsX, int numPointsY) 
+{
     int idx;
     //std::srand(unsigned(1.)); // initial seed for random number generator
-    real randomNumber;
+    //real randomNumber;
 
     // single initial peak
     //int iCenter = (int)((real)numSegmentsX /2.);
@@ -484,7 +309,8 @@ real* f, real* x, real* concCa, real value, int numPointsX, int numPointsY) {
     //int idxCenter = CalculateLinearCoordinate_CPU(iCenter, jCenter);
 
     for (int j = 0; j < numPointsY; j++)
-        for (int i = 0; i < numPointsX; i++) {
+        for (int i = 0; i < numPointsX; i++) 
+        {
 
             int idxCenter = CalculateLinearCoordinate_CPU(i, j, numPointsX);
             //randomNumber =  ((real)(std::rand() % 20))/20.; // 4phase setting
@@ -517,25 +343,25 @@ real* f, real* x, real* concCa, real value, int numPointsX, int numPointsY) {
                 //std::cin.get();
                 // TODO //////////////////////////////////////////////////////////////
 
-                // the func returns a std::map of all the vars' values
-                ///* std::map<std::string, real> */ real* stateForPhase = VviaPhase(phase);
+                real* stateForPhase = CalculateStateFromFile(phase);
 
                 //printf("Phase: %.2f deg., VOfPhase = %.2f\n", phase*180./M_PI, stateForPhase["V"]);
                 //std::cin.get();
 
-                V[idxCenter] = -60.; //stateForPhase[V_];  //VviaPhase(phase); //M_PI/12. //VRest;
-                m[idxCenter] =  0.5; //stateForPhase[m_]; //0.067;//m_inf_CPU(VRest); // 0.5
-                h[idxCenter] = 0.5; //stateForPhase[h_]; //0.999; //h_inf_CPU(VRest); // 0.5
-                J[idxCenter] = 0.5; //stateForPhase[J_]; //0.;// 0.1; // may be false; TODO perform calcs with higher T 
-                d[idxCenter] = 0.5; //stateForPhase[d_]; //0.; //0.;
-                f[idxCenter] = 0.5; //stateForPhase[f_]; //1.; //1.;
-                x[idxCenter] = 0.5; //stateForPhase[x_];
-                concCa[idxCenter] = 3e-7; //stateForPhase[concCa_];
+                V[idxCenter] = stateForPhase[V_];  //VviaPhase(phase); //M_PI/12. //VRest;
+                m[idxCenter] = stateForPhase[m_]; //0.067;//m_inf_CPU(VRest); // 0.5
+                h[idxCenter] = stateForPhase[h_]; //0.999; //h_inf_CPU(VRest); // 0.5
+                J[idxCenter] = stateForPhase[J_]; //0.;// 0.1; // may be false; TODO perform calcs with higher T 
+                d[idxCenter] = stateForPhase[d_]; //0.; // may be false; TODO perform calcs with higher T  
+                f[idxCenter] = stateForPhase[f_]; //0.; //0.;
+                x[idxCenter] = stateForPhase[x_]; //1.; //1.;
+                concCa[idxCenter] = stateForPhase[concCa_];
 
                 // for progress checking: in percents
-                printf("Set. initial cond: %.2f percent completed\n", 
-                        100.*idxCenter / CalculateLinearCoordinate_CPU(numPointsX - 1, numPointsY - 1, numPointsX));
+                //printf("Set. initial cond: %.2f percent completed\n", 
+                //        100.*idxCenter / CalculateLinearCoordinate_CPU(numPointsX - 1, numPointsY - 1, numPointsX));
             }
+
 
     // after filling the whole area: "fill" borders wiht Neumann boundary cond.
     // the borders: Neumann boundary conditions
@@ -545,7 +371,7 @@ real* f, real* x, real* concCa, real value, int numPointsX, int numPointsY) {
             int idxCenter = CalculateLinearCoordinate_CPU(i, j, numPointsX);
             
             // borrder cells, including corner cells
-            if (i == 0 || j == 0 || i == (numPointsX - 1) || j == (numPointsY - 1))
+            if (i == 0 || j == 0 || i == (numPointsX - 1) || j == (numPointsX - 1))
             {
                 int idxNear;
 
@@ -808,7 +634,7 @@ deviceptr(tmp, tmpConc)
 	
 	} // acc kernels
     
-    if ((stepNumber % 4000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
+    if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
     { // output each 10 msec: 10/dt = 2000 (old val.)
         //if ( (stepNumber) % (int)(T/dt/500)  == 0 ) {
         #pragma acc update host(VOld[0:numPointsTotal])
