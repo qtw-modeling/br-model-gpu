@@ -36,7 +36,7 @@
 //#define numPointsTotal (numPointsX * numPointsY)
 #define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
 #define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
-#define T (2000.) //(1000.) // old val: 500 // endtime (in ms)
+#define T (25.) //(1000.) // old val: 500 // endtime (in ms)
 #define dt 0.005 // old val = 1e-4 // timestep (in ms)
 
 // model parameters
@@ -405,17 +405,18 @@ int main(int argc, char** argv) {
     // setting a GPU for the computations; NOTE: req "openacc.h"!
     //acc_set_device_num(1, acc_device_nvidia);
 
-    // reading the params from the console
-    int numSegmentsX = atoi(argv[1]);
-    int numSegmentsY = atoi(argv[2]);
+    // we pass number of cells as command line args; 
+    // reading the params from the console:
+    int numSegmentsX = atoi(argv[1]) + 1;
+    int numSegmentsY = atoi(argv[2]) + 1;
     //int serieOfLaunchesNum = atoi(argv[3]);
     
     // storing output file's name in char[]
     /* string */ char tmp_output_file[256];
     sprintf(tmp_output_file, argv[3]); 
     
-    int numPointsX = numSegmentsX + 1;
-    int numPointsY = numSegmentsY + 1;
+    int numPointsX = numSegmentsX + 1; // includes 2 ghost cells; numCells + 2 = numPointsX
+    int numPointsY = numSegmentsY + 1; // same
 
     int numPointsTotal = numPointsX * numPointsY;
 
@@ -483,7 +484,7 @@ int main(int argc, char** argv) {
 
     // initializing before timesteppin'
     SetInitialConditions_CPU(VOld, mOld, hOld, JOld, dOld, fOld, xOld, concCaOld, 0., numPointsX, numPointsY);
-    //SetInitialConditions_CPU(VNew, mNew, hNew, JNew, dNew, fNew, xNew, 0.); // for avoiding "junk" values in all '...New' arrays
+    //SetInitialConditions_CPU(VNew, mNew, hNew, JNew, dNew, fNew, xNew, concCaOld, 0., numPointsX, numPointsY); // for avoiding "junk" values in all '...New' arrays
 
     real tCurrent = 0.;
     int stepNumber = 0;
@@ -515,60 +516,66 @@ deviceptr(tmp, tmpConc)
     concCaOld[0:numPointsTotal], \
     VNew[0:numPointsTotal], mNew[0:numPointsTotal], hNew[0:numPointsTotal], \
     JNew[0:numPointsTotal], dNew[0:numPointsTotal], fNew[0:numPointsTotal], xNew[0:numPointsTotal], \
-    concCaNew[0:numPointsTotal])
+    concCaNew[0:numPointsTotal]) \
+    vector_length(32) num_workers(1) //num_gangs(32)
 	{
 	
-	#pragma acc loop collapse(2) independent
-	for (int j = 0; j < numPointsY; j++)
-            for (int i = 0; i < numPointsX; i++) 
-            {
+    // loop over ALL cells
+	//#pragma acc loop independent vector(32) worker(2) gang(256)
+    #pragma acc loop gang // as many gangs (= blocks) as needed
+    for (int j = 0; j < numPointsY; j++)
+    {       
+        //#pragma acc loop independent vector(32) worker(2) gang(256)
+        #pragma acc loop vector
+        for (int i = 0; i < numPointsX; i++)
+        {
 
-                int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
+            int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
                 
-                // inner cells
-                if (i >= 1 && j >= 1 && i <= (numSegmentsX - 1) && j <= (numSegmentsY - 1))
-                {
+            // inner cells
+            if (i >= 1 && j >= 1 && i <= (numSegmentsX - 1) && j <= (numSegmentsY - 1))
+            {
                     // for short names
-                    int idxUp = CalculateLinearCoordinate(i, j + 1, numPointsX);
-                    int idxDown = CalculateLinearCoordinate(i, j - 1, numPointsX);
-                    int idxLeft = CalculateLinearCoordinate(i - 1, j, numPointsX);
-                    int idxRight = CalculateLinearCoordinate(i + 1, j, numPointsX);
+            int idxUp = CalculateLinearCoordinate(i, j + 1, numPointsX);
+            int idxDown = CalculateLinearCoordinate(i, j - 1, numPointsX);
+            int idxLeft = CalculateLinearCoordinate(i - 1, j, numPointsX);
+            int idxRight = CalculateLinearCoordinate(i + 1, j, numPointsX);
 
                     
-                    ///////////////// gating variables: ode ("reaction") step
+            ///////////////// gating variables: ode ("reaction") step
 
-                    // TODO: make only ONE read of VOld[idxCenter], etc from memory; to more speedup, esp. for GPU
-                    mNew[idxCenter] = m_inf(VOld[idxCenter]) + (mOld[idxCenter] - m_inf(VOld[idxCenter]))
-                                                                * exp(-dt * (alpha_m(VOld[idxCenter]) + beta_m(VOld[idxCenter])));
+            // TODO: make only ONE read of VOld[idxCenter], etc from memory; to more speedup, esp. for GPU
+            mNew[idxCenter] = m_inf(VOld[idxCenter]) + (mOld[idxCenter] - m_inf(VOld[idxCenter]))
+                                                        * exp(-dt * (alpha_m(VOld[idxCenter]) + beta_m(VOld[idxCenter])));
 
                     
-                    hNew[idxCenter] = h_inf(VOld[idxCenter]) + (hOld[idxCenter] - h_inf(VOld[idxCenter]))
+            hNew[idxCenter] = h_inf(VOld[idxCenter]) + (hOld[idxCenter] - h_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_h(VOld[idxCenter]) + beta_h(VOld[idxCenter])));
                     
-                    JNew[idxCenter] = j_inf(VOld[idxCenter]) + (JOld[idxCenter] - j_inf(VOld[idxCenter]))
+            JNew[idxCenter] = j_inf(VOld[idxCenter]) + (JOld[idxCenter] - j_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_j(VOld[idxCenter]) + beta_j(VOld[idxCenter])));
                    
 
-                    dNew[idxCenter] = d_inf(VOld[idxCenter]) + (dOld[idxCenter] - d_inf(VOld[idxCenter]))
+            dNew[idxCenter] = d_inf(VOld[idxCenter]) + (dOld[idxCenter] - d_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_d(VOld[idxCenter]) + beta_d(VOld[idxCenter])));
                     
-                    fNew[idxCenter] = f_inf(VOld[idxCenter]) + (fOld[idxCenter] - f_inf(VOld[idxCenter]))
+            fNew[idxCenter] = f_inf(VOld[idxCenter]) + (fOld[idxCenter] - f_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_f(VOld[idxCenter]) + beta_f(VOld[idxCenter])));
                    
-                    xNew[idxCenter] = x_inf(VOld[idxCenter]) + (xOld[idxCenter] - x_inf(VOld[idxCenter]))
+            xNew[idxCenter] = x_inf(VOld[idxCenter]) + (xOld[idxCenter] - x_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_x(VOld[idxCenter]) + beta_x(VOld[idxCenter])));
                     
                     
-                    /*
-                    // for steady state's calculation
-                    VNew[idxCenter] = VRest;
-                    */
+            /*
+            // for steady state's calculation
+            VNew[idxCenter] = VRest;
+            */
 
                     
-                    //////////////////
-                    // "discrete diffusion" step
-                    VNew[idxCenter] = VOld[idxCenter]
-                    // uncomment if cells are connected; otherwize --- Nans
+            //////////////////
+            // "discrete diffusion" step
+            VNew[idxCenter] = VOld[idxCenter]
+            // uncomment if cells are connected; otherwize --- Nans
                      + dt / Cm * (
                             Dx  * (VOld[idxRight] - 2 * VOld[idxCenter] + VOld[idxLeft])
                             + Dy  * (VOld[idxUp] - 2 * VOld[idxCenter] + VOld[idxDown])
@@ -593,44 +600,51 @@ deviceptr(tmp, tmpConc)
                                                 ); // "standart" I_stim = 1e0;
                     */
                     
-                    // concentrations calc
-                    concCaNew[idxCenter] = concCaOld[idxCenter] + dt * (
+            // concentrations calc
+            concCaNew[idxCenter] = concCaOld[idxCenter] + dt * (
                                                             -1.*1e-7*ISOld[idxCenter] 
                                                             + 0.07*(1e-7 - concCaOld[idxCenter]) 
                                                             ); // index "0" --- for array of length 1
                     
                } // if
-               
+        } // for i
+    } // for j
+
+                
                // the borders: Neumann boundary conditions
-               else
-               {
-                    int idxNear;
-                    
-                    if ((i == 0) && (j >= 1) && (j <= numSegmentsY - 1)) // left border, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i + 1, j, numPointsX);
-                    else if ((j == 0) && (i >= 1) && (i <= numSegmentsX - 1)) // bottom, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i, j + 1, numPointsX);
-                    else if ((j == numSegmentsY) && (i >= 1) && (i <= numSegmentsX - 1)) // top, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i, j - 1, numPointsX);
-                    else if ((i == numSegmentsX) && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
-                        idxNear = CalculateLinearCoordinate(i - 1, j, numPointsX);
-                    else { // if corner cell
-                        continue; // do nothing, continue the "i,j" loop
-                    }
+                #pragma acc loop gang
+	            for (int j = 0; j < numPointsY; j++)
+                {
+                    #pragma acc loop vector
+                    for (int i = 0; i < numPointsX; i++) 
+                    {
+                        int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
+                        int idxNear;
+                        
+                        if ((i == 0) && (j >= 1) && (j <= numSegmentsY - 1)) // left border, except for corner cells
+                            idxNear = CalculateLinearCoordinate(i + 1, j, numPointsX);
+                        else if ((j == 0) && (i >= 1) && (i <= numSegmentsX - 1)) // bottom, except for corner cells
+                            idxNear = CalculateLinearCoordinate(i, j + 1, numPointsX);
+                        else if ((j == numSegmentsY) && (i >= 1) && (i <= numSegmentsX - 1)) // top, except for corner cells
+                            idxNear = CalculateLinearCoordinate(i, j - 1, numPointsX);
+                        else if ((i == numSegmentsX) && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
+                            idxNear = CalculateLinearCoordinate(i - 1, j, numPointsX);
+                        else { // if corner cell
+                            continue; // do nothing, continue the "i,j" loop
+                        }
 
-                    // what about corner cells? for now, they are not treated (?)
-                    // Neumann boundary cond setting
-                    VNew[idxCenter] = VNew[idxNear];
-                    mNew[idxCenter] = mNew[idxNear];
-                    hNew[idxCenter] = hNew[idxNear];
-                    JNew[idxCenter] = JNew[idxNear];
-                    dNew[idxCenter] = dNew[idxNear];
-                    fNew[idxCenter] = fNew[idxNear];
-                    xNew[idxCenter] = xNew[idxNear];
-                    concCaNew[idxCenter] = concCaNew[idxNear];
-               }
-
-            } // for
+                        // what about corner cells? for now, they are not treated (?)
+                        // Neumann boundary cond setting
+                        VNew[idxCenter] = VNew[idxNear];
+                        mNew[idxCenter] = mNew[idxNear];
+                        hNew[idxCenter] = hNew[idxNear];
+                        JNew[idxCenter] = JNew[idxNear];
+                        dNew[idxCenter] = dNew[idxNear];
+                        fNew[idxCenter] = fNew[idxNear];
+                        xNew[idxCenter] = xNew[idxNear];
+                        concCaNew[idxCenter] = concCaNew[idxNear];
+                    } // for i
+                } // for j
 	
 	} // acc kernels
     
