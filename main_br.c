@@ -1,23 +1,9 @@
 //
 // Created by QuoTheWhite on 27/03/2019.
-//
-//#include <stdio.h>
-//#include <math.h>
-//#include <time.h>
-//#include <fstream>
-//#include <cstdlib>
 //#include "openacc.h"
-
-
-//#include <string>
-//#include <map>
-//#include <cmath>
-//#include <math.h> // 4some specific constants
-
 // 4 C++11 includes
 //#include <vector>
 
-//typedef double real;
 #include "common.h" // one for all includes
 #include "state.h"
 #include "extra.h"
@@ -36,7 +22,7 @@
 //#define numPointsTotal (numPointsX * numPointsY)
 #define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
 #define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
-#define T (25.) //(1000.) // old val: 500 // endtime (in ms)
+//#define T (25.) //(1000.) // old val: 500 // endtime (in ms)
 #define dt 0.005 // old val = 1e-4 // timestep (in ms)
 
 // model parameters
@@ -64,72 +50,6 @@ real* MemAlloc(int n)
 }
 
 
-void Write2VTK(const int n, real* p, const real h, const int step)
-{
-    char fn[256];
-    sprintf(fn, "./output/V.%d.vtk", step); 
-
-    // C code
-    FILE* f = fopen(fn, "w");
-    fprintf(f, "# vtk DataFile Version 3.0\nSolution\nASCII\nDATASET RECTILINEAR_GRID\n");
-    fprintf(f, "DIMENSIONS %d %d 1\n", n + 1, n + 1);
-    fprintf(f, "X_COORDINATES %d double\n", n + 1);
-
-    int i;
-    for (i = 0; i < n +1; i++)
-    {
-        fprintf(f, "%.2e ", i*h);
-    }
-    fprintf(f, "\n");
-
-    fprintf(f, "Y_COORDINATES %d double\n", n + 1);
-    for (i = 0; i < n +1; i++)
-    {
-        fprintf(f, "%.2e ", i*h);
-    }
-    fprintf(f, "\n");
-
-    fprintf(f, "Z_COORDINATES 1 double\n0\n");
-    fprintf(f, "CELL_DATA %d\n", (n * n));
-    fprintf(f, "SCALARS V_membrane double\nLOOKUP_TABLE default\n");    
-    
-    int j;
-    for (j = 0; j < n; j++) {
-        for (i = 0; i < n; i++)
-            fprintf(f, "%.2e ",  p[j * n + i]);
-        fprintf(f, "\n");
-    }
-
-    fclose(f);
-
-
-/* C++ code
-    std::fstream f(fn, std::ios::out);
-    f << "# vtk DataFile Version 3.0" << std::endl;
-    f << "Solution" << std::endl;
-    f << "ASCII" << std::endl;
-    f << "DATASET RECTILINEAR_GRID" << std::endl;
-    f << "DIMENSIONS " << n + 1 << " " << n + 1 << " 1" << std::endl;
-    f << "X_COORDINATES " << n + 1 << " double" << std::endl;
-    for (int i = 0; i < n + 1; i++)
-        f << i * h << " ";
-    f << std::endl;
-    f << "Y_COORDINATES " << n + 1 << " double" << std::endl;
-    for (int i = 0; i < n + 1; i++)
-        f << i * h << " ";
-    f << std::endl;
-    f << "Z_COORDINATES 1 double\n0" << std::endl;
-    f << "CELL_DATA " << (n * n) << std::endl;
-    f << "SCALARS V_membrane double\nLOOKUP_TABLE default" << std::endl;
-    for (int j = 0; j < n; j++) {
-        for (int i = 0; i < n; i++)
-            f << p[j * n + i] << " ";
-        f << std::endl;
-    }
-    f.close();
-    */
-}
-
 
 int CalculateLinearCoordinate_CPU(int i, int j, int numPointsX) {
     return i + j*numPointsX;
@@ -153,7 +73,7 @@ real FuncSinglePeriod(real t)
 
 
 /*
- // "__П__ " --- func looks like dis
+ // "__П__ " --- func looks like this
     if (t < 2./7.*PeriodStim || t > 4./7*PeriodStim)
         return 0.;
     else 
@@ -230,19 +150,6 @@ real TotalIonCurrent(int idx, real V, real m, real h, real j, real d, real f, re
 }
 
 
-
-
-real TimeViaPhase(real phase_, real Period_, real t0_) 
-{
-    /* phi = phase; Period = T; t0 = time of first depolarization. */
-    // underscores --- for not confusing with global scope area names (or #defines)
-    return t0_ + Period_ / (2.*M_PI) * phase_;
-    
-}
-
-
-
-
 // phase calculations
 real* CalculateStateFromFile(real phase) 
 {
@@ -296,24 +203,17 @@ real* CalculateStateFromFile(real phase)
 }
 
 
+
 void SetInitialConditions_CPU(real* V, real* m, real* h, real* J, real* d, real* f, 
 real* x, real* concCa, real value, int numPointsX, int numPointsY) 
 {
     int idx;
-    //std::srand(unsigned(1.)); // initial seed for random number generator
-    //real randomNumber;
-
-    // single initial peak
-    //int iCenter = (int)((real)numSegmentsX /2.);
-    //int jCenter = (int)((real)numSegmentsY /2.); // tmp values
-    //int idxCenter = CalculateLinearCoordinate_CPU(iCenter, jCenter);
 
     for (int j = 0; j < numPointsY; j++)
         for (int i = 0; i < numPointsX; i++) 
         {
 
             int idxCenter = CalculateLinearCoordinate_CPU(i, j, numPointsX);
-            //randomNumber =  ((real)(std::rand() % 20))/20.; // 4phase setting
 
             // the borders: Dirichlet boundary conditions
             //if (i == 0 || j == 0 || i == (numPointsX - 1) || j == (numPointsY - 1)) {
@@ -340,13 +240,12 @@ real* x, real* concCa, real value, int numPointsX, int numPointsY)
                 //real phaseShifted = phase - M_PI/2.; // phase from R.Syunyaev article
                 
                 //printf("Phase = %.2f deg.\n", phase*180/M_PI);
-                //std::cin.get();
                 // TODO //////////////////////////////////////////////////////////////
 
                 real* stateForPhase = CalculateStateFromFile(phase);
 
                 //printf("Phase: %.2f deg., VOfPhase = %.2f\n", phase*180./M_PI, stateForPhase["V"]);
-                //std::cin.get();
+                
 
                 V[idxCenter] = stateForPhase[V_];  //VviaPhase(phase); //M_PI/12. //VRest;
                 m[idxCenter] = stateForPhase[m_]; //0.067;//m_inf_CPU(VRest); // 0.5
@@ -410,10 +309,11 @@ int main(int argc, char** argv) {
     int numSegmentsX = atoi(argv[1]) + 1;
     int numSegmentsY = atoi(argv[2]) + 1;
     //int serieOfLaunchesNum = atoi(argv[3]);
-    
+    const int T = atoi(argv[3]);
+
     // storing output file's name in char[]
     /* string */ char tmp_output_file[256];
-    sprintf(tmp_output_file, argv[3]); 
+    sprintf(tmp_output_file, argv[4]);
     
     int numPointsX = numSegmentsX + 1; // includes 2 ghost cells; numCells + 2 = numPointsX
     int numPointsY = numSegmentsY + 1; // same
@@ -463,21 +363,40 @@ int main(int argc, char** argv) {
 
     // for output in a loop
     //std::map<std::string, real*> variables;
-    real* variables[12]; // number of vars = 12
-    variables[V_] = VOld;
-    variables[m_] = mOld;
-    variables[h_] = hOld;
-    variables[J_] = JOld;
-    variables[d_] = dOld;
-    variables[f_] = fOld;
-    variables[x_] = xOld;
+    const int NUM_VARS = 12;
     
-    variables[INa_] = INaOld;
-    variables[IK_] = IKOld;
-    variables[IX_] = IXOld;
-    variables[IS_] = ISOld;
+    real* variablesOld[NUM_VARS]; // number of vars = 12
+    variablesOld[V_] = VOld;
+    variablesOld[m_] = mOld;
+    variablesOld[h_] = hOld;
+    variablesOld[J_] = JOld;
+    variablesOld[d_] = dOld;
+    variablesOld[f_] = fOld;
+    variablesOld[x_] = xOld;
+    
+    variablesOld[INa_] = INaOld;
+    variablesOld[IK_] = IKOld;
+    variablesOld[IX_] = IXOld;
+    variablesOld[IS_] = ISOld;
 
-    variables[concCa_] = concCaOld;
+    variablesOld[concCa_] = concCaOld;
+
+    // array of vars (4 deletion within a loop in the end)
+    real* variablesNew[NUM_VARS]; // number of vars = 12
+    variablesNew[V_] = VNew;
+    variablesNew[m_] = mNew;
+    variablesNew[h_] = hNew;
+    variablesNew[J_] = JNew;
+    variablesNew[d_] = dNew;
+    variablesNew[f_] = fNew;
+    variablesNew[x_] = xNew;
+    
+    variablesNew[INa_] = INaNew;
+    variablesNew[IK_] = IKNew;
+    variablesNew[IX_] = IXNew;
+    variablesNew[IS_] = ISNew;
+
+    variablesNew[concCa_] = concCaNew;
 
     // = {"V", "m", "h", "J", "d", "f", "x"};
 
@@ -520,21 +439,21 @@ deviceptr(tmp, tmpConc)
     vector_length(32) num_workers(1) //num_gangs(32)
 	{
 	
-    // loop over ALL cells
+    // loop over inner cells
 	//#pragma acc loop independent vector(32) worker(2) gang(256)
     #pragma acc loop gang // as many gangs (= blocks) as needed
-    for (int j = 0; j < numPointsY; j++)
+    for (int j = 1; j < numPointsY - 1; j++)
     {       
         //#pragma acc loop independent vector(32) worker(2) gang(256)
         #pragma acc loop vector
-        for (int i = 0; i < numPointsX; i++)
+        for (int i = 1; i < numPointsX - 1; i++)
         {
 
             int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
                 
             // inner cells
-            if (i >= 1 && j >= 1 && i <= (numSegmentsX - 1) && j <= (numSegmentsY - 1))
-            {
+            //if (i >= 1 && j >= 1 && i <= (numSegmentsX - 1) && j <= (numSegmentsY - 1))
+            //{
                     // for short names
             int idxUp = CalculateLinearCoordinate(i, j + 1, numPointsX);
             int idxDown = CalculateLinearCoordinate(i, j - 1, numPointsX);
@@ -606,12 +525,56 @@ deviceptr(tmp, tmpConc)
                                                             + 0.07*(1e-7 - concCaOld[idxCenter]) 
                                                             ); // index "0" --- for array of length 1
                     
-               } // if
+            //   } // if
         } // for i
     } // for j
 
+    } // acc parallel 4 inner cells
+
+            
+            // the borders: Neumann boundary conditions, NEW VERS;
+            // corner cells are not treated. 
+                //#pragma acc parallel async(0) \
+                //present(VNew[0:numPointsTotal])
+                //{
+                    #pragma acc parallel async(0) \
+                    present(VNew[0:numPointsTotal])
+                    {
+                    #pragma acc loop vector // seq
+                    for (int j = 1; j < numPointsY - 1; j++)
+                    {
+                        int idxCenterLeftBord = CalculateLinearCoordinate(0, j, numPointsX);
+                        int idxCenterRightBord = CalculateLinearCoordinate(numSegmentsX, j, numPointsX);
+                        
+                        int idxNearLeft = CalculateLinearCoordinate(1, j, numPointsX);
+                        int idxNearRight = CalculateLinearCoordinate(numSegmentsX - 1, j, numPointsX);
+
+                        VNew[idxCenterLeftBord] = VNew[idxNearLeft];
+                        VNew[idxCenterRightBord] = VNew[idxNearRight];
+                    }
+                    }
+
+                    #pragma acc parallel async(1) \
+                    present(VNew[0:numPointsTotal])
+                    {
+                    #pragma acc loop vector // seq
+                    for (int i = 1; i < numPointsX - 1; i++)
+                    {
+                        int idxCenterBottomBord = CalculateLinearCoordinate(i, 0, numPointsX);
+                        int idxCenterTopBord = CalculateLinearCoordinate(i, numSegmentsY, numPointsX);
+                        
+                        int idxNearBottom = CalculateLinearCoordinate(i, 1, numPointsX);
+                        int idxNearTop = CalculateLinearCoordinate(i, numSegmentsY - 1, numPointsX);
+
+                        VNew[idxCenterBottomBord] = VNew[idxNearBottom];
+                        VNew[idxCenterTopBord] = VNew[idxNearTop];
+                    }
+                    }
                 
-               // the borders: Neumann boundary conditions
+                #pragma acc wait(0, 1)
+
+                /*
+               // the borders: Neumann boundary conditions, OLD VERS
                 #pragma acc loop gang
 	            for (int j = 0; j < numPointsY; j++)
                 {
@@ -634,46 +597,48 @@ deviceptr(tmp, tmpConc)
                         }
 
                         // what about corner cells? for now, they are not treated (?)
-                        // Neumann boundary cond setting
+                        // Neumann boundary cond setting;
+                        // we need only set BC for V, not other vars?
                         VNew[idxCenter] = VNew[idxNear];
-                        mNew[idxCenter] = mNew[idxNear];
-                        hNew[idxCenter] = hNew[idxNear];
-                        JNew[idxCenter] = JNew[idxNear];
-                        dNew[idxCenter] = dNew[idxNear];
-                        fNew[idxCenter] = fNew[idxNear];
-                        xNew[idxCenter] = xNew[idxNear];
-                        concCaNew[idxCenter] = concCaNew[idxNear];
+                        //mNew[idxCenter] = mNew[idxNear];
+                        //hNew[idxCenter] = hNew[idxNear];
+                        //JNew[idxCenter] = JNew[idxNear];
+                        //dNew[idxCenter] = dNew[idxNear];
+                        //fNew[idxCenter] = fNew[idxNear];
+                        //xNew[idxCenter] = xNew[idxNear];
+                        //concCaNew[idxCenter] = concCaNew[idxNear];
                     } // for i
                 } // for j
-	
-	} // acc kernels
+                */
+
+	//} // acc parallel 4 inner cells
     
     if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
     { // output each 10 msec: 10/dt = 2000 (old val.)
         //if ( (stepNumber) % (int)(T/dt/500)  == 0 ) {
         #pragma acc update host(VOld[0:numPointsTotal])
-            variables[V_] = VOld;
-            //variables[m_] = mOld;
-            //variables[h_] = hOld;
-            //variables[J_] = JOld;
-            //variables[d_] = dOld;
-            //variables[f_] = fOld;
-            //variables[x_] = xOld;
-            //variables[INa_] = INaOld;
-            //variables[IK_] = IKOld;
-            //variables[IX_] = IXOld;
-            //variables[IS_] = ISOld;
-            //variables[concCa_] = concCaOld;
+            variablesOld[V_] = VOld;
+            //variablesOld[m_] = mOld;
+            //variablesOld[h_] = hOld;
+            //variablesOld[J_] = JOld;
+            //variablesOld[d_] = dOld;
+            //variablesOld[f_] = fOld;
+            //variablesOld[x_] = xOld;
+            //variablesOld[INa_] = INaOld;
+            //variablesOld[IK_] = IKOld;
+            //variablesOld[IX_] = IXOld;
+            //variablesOld[IS_] = ISOld;
+            //variablesOld[concCa_] = concCaOld;
 
             int outNumber = stepNumber;
                 
             //if (variable.first.compare("V") == 0 ) // output only "V"
             //{
-            Write2VTK(numPointsX, variables[V_], hx, outNumber); // for now: numPointsX == numPointsY
-            //Write2VTK("V", numPointsX, variables["V"], hx, counterOutput); // for now: numPointsX == numPointsY
+            Write2VTK(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+            //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
             //}
             //}
-            printf("Time: %.2f percent completed\n", 100.*stepNumber*dt/T);
+            printf("Progress: %.2f %% completed\n", 100.*stepNumber*dt/T);
 	        counterOutput++;
         }
         
@@ -713,26 +678,11 @@ deviceptr(tmp, tmpConc)
     fclose(ff);
     
     // cleaning up
-    free(VOld);
-    free(VNew);
-    free(mOld);
-    free(mNew);
-    free(hOld);
-    free(hNew);
-    
-    free(JOld);
-    free(JNew);
-    
-    free(dOld);
-    free(dNew);
-    free(fOld);
-    free(fNew);
-
-    free(xOld);
-    free(xNew);
-
-    free(concCaOld);
-    free(concCaNew);
+    for (int i = 0; i < NUM_VARS; i++)
+    {
+        free(variablesOld[i]);
+        free(variablesNew[i]);
+    }
 
 
     return 0;

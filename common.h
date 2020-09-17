@@ -1,17 +1,16 @@
-#pragma once
+//#pragma once // this wont work!
+#ifndef __COMMON_H
+#define __COMMON_H
 
 #include <stdio.h>
 #include <math.h>
 #include <time.h>
 #include <stdbool.h>
-//#include <fstream>
-//#include <cstdlib>
-//#include <iostream>
 
-typedef double real;
 
 #define M_PI acos(-1.)
 
+typedef double real;
 //#define DEBUG() printf("DEBUG pause\n");
 
 
@@ -23,3 +22,5 @@ real AlphaGeneralForm(real Vm,
 
 // Currents are in the end of enum: "concCa" is a state var, and should be before Currents for correct enum numbering usage
 //enum vars {V_, m_, h_, J_, d_, f_, x_, concCa_, INa_, IK_, IX_, IS_};
+
+#endif
