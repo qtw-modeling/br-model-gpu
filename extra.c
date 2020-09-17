@@ -1,9 +1,10 @@
 #include "extra.h"
 
-void Write2VTKWithGhosts(const int n, real* p, const real h, const int step)
+
+void Write2VTK(const int n, real* p, const real h, const int step)
 {
     char fn[256];
-    sprintf(fn, "./output/VWithGhosts.%d.vtk", step); 
+    sprintf(fn, "./output/V.%d.vtk", step); 
 
     // n --- dim of 2D array with ghost cells
 
@@ -69,7 +70,7 @@ void Write2VTKWithGhosts(const int n, real* p, const real h, const int step)
     */
 }
 
-void Write2VTKNoGhosts(const int n, real* p, const real h, const int step)
+void Write2VTK_noGhosts(const int n, real* p, const real h, const int step)
 {
     char fn[256];
     sprintf(fn, "./output/VNoGhosts.%d.vtk", step); 

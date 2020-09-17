@@ -60,6 +60,46 @@ int CalculateLinearCoordinate(int i, int j, int numPointsX) {
     return i + j*numPointsX;
 }
 
+#pragma acc routine seq
+void /* real* */ SliceGhosts2D(int xDimWithGhosts, int yDimWithGhosts, real* arrWithGhosts, real* arrNoGhosts)
+{
+    //real* arrNoGhosts = MemAlloc( (xDimWithGhosts - 2)*(yDimWithGhosts - 2) ); // exclude 2 ghost cells in each DIM
+    
+    // aux. vars
+    int idx, counter, J, offset;
+    counter = 0;
+    offset = xDimWithGhosts;
+    
+    // filling arrNoGhosts consequently 
+    //#pragma acc loop vector
+    /*
+    for (int k = 0; k < (xDimWithGhosts - 2)*(yDimWithGhosts - 2); k++)
+    {
+        J = 2*counter + 1; // just a formula for an odd num
+        idx = offset + k + J; 
+        arrNoGhosts[k] = arrWithGhosts[idx];
+        
+        if ( (k + 1) % (xDimWithGhosts - 2) == 0) // TODO: check correctness of indexing of arraWithGhosts[idx] by hand!
+            counter += 1;
+    }
+    */
+
+    int k = 0; // for indexing arrNoGhosts (its 1D-arrray)
+    while (k < xDimWithGhosts - 2) // without 2 ghost cells
+    {
+        // output without ghost cells
+        for (int j = 1; j < xDimWithGhosts - 1; j++) 
+        {
+            for (int i = 1; i < xDimWithGhosts - 1; i++)
+            {
+                arrNoGhosts[k] = arrWithGhosts[j * xDimWithGhosts + i]; // [linear index; should be same as in CalcLinearCoord(...)]
+                k += 1; // moving to next element of arrNoGhosts
+            }
+        }
+    }
+
+    //return arrNoGhosts;
+}
 
 
 real FuncSinglePeriod(real t)
@@ -308,7 +348,9 @@ int main(int argc, char** argv) {
     // reading the params from the console:
     int numCellsX = atoi(argv[1]);
     int numCellsY = atoi(argv[2]);
+    int numCellsTotal = numCellsX*numCellsY;
     //int serieOfLaunchesNum = atoi(argv[3]);
+    
     const int T = atoi(argv[3]);
 
     // storing output file's name in char[]
@@ -317,7 +359,6 @@ int main(int argc, char** argv) {
     
     int numPointsX = numCellsX + 2; // includes 2 ghost cells; numCells + 2 = numPointsX
     int numPointsY = numCellsY + 2; // same
-
     int numPointsTotal = numPointsX * numPointsY;
 
     // allocating memory
@@ -360,6 +401,8 @@ int main(int argc, char** argv) {
 
     real* tmp; // a pointer for swapping time-layers 'n' and 'n+1'
     real *tmpConc; // a pointer for swapping time-layers 'n' and 'n+1' for concentrations
+
+    real* printV = MemAlloc(numCellsTotal);
 
     // for output in a loop
     //std::map<std::string, real*> variables;
@@ -420,6 +463,7 @@ concCaOld[0:numPointsTotal], \
 VNew[0:numPointsTotal], mNew[0:numPointsTotal], hNew[0:numPointsTotal], \
 JNew[0:numPointsTotal], dNew[0:numPointsTotal], fNew[0:numPointsTotal], xNew[0:numPointsTotal], \
 concCaNew[0:numPointsTotal]) \
+create(printV[0:numCellsTotal]) \
 deviceptr(tmp, tmpConc)
 {
     // main loop: timestepping
@@ -532,7 +576,7 @@ deviceptr(tmp, tmpConc)
     } // acc parallel 4 inner cells
 
             
-            // the borders: Neumann boundary conditions, NEW VERS;
+            // setting Neumann BCs, NEW VERS;
             // corner cells are not treated. 
                 //#pragma acc parallel async(0) \
                 //present(VNew[0:numPointsTotal])
@@ -572,6 +616,8 @@ deviceptr(tmp, tmpConc)
                     }
                 
                 #pragma acc wait(0, 1)
+
+
 
                 /*
                // the borders: Neumann boundary conditions, OLD VERS
@@ -614,10 +660,20 @@ deviceptr(tmp, tmpConc)
 	//} // acc parallel 4 inner cells
     
     if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
-    { // output each 10 msec: 10/dt = 2000 (old val.)
+    { 
+        #pragma acc parallel \
+        present(VOld[0:numPointsTotal], printV[0:numCellsTotal])
+        {
+            SliceGhosts2D(numPointsX, numPointsY, VOld, printV);
+        }
+        
+        // output each 10 msec: 10/dt = 2000 (old val.)
         //if ( (stepNumber) % (int)(T/dt/500)  == 0 ) {
-        #pragma acc update host(VOld[0:numPointsTotal])
-            variablesOld[V_] = VOld;
+        #pragma acc update host(printV[0:numCellsTotal]) // (VOld[0:numPointsTotal])
+            
+            //variablesOld[V_] = printV;
+            
+            //variablesOld[V_] = VOld;
             //variablesOld[m_] = mOld;
             //variablesOld[h_] = hOld;
             //variablesOld[J_] = JOld;
@@ -630,12 +686,16 @@ deviceptr(tmp, tmpConc)
             //variablesOld[IS_] = ISOld;
             //variablesOld[concCa_] = concCaOld;
 
+            //real* printV = SliceGhosts2D(numPointsX, numPointsY, variablesOld[V_]);
+
             int outNumber = stepNumber;
                 
             //if (variable.first.compare("V") == 0 ) // output only "V"
             //{
-            Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
-            Write2VTKNoGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+            
+            Write2VTK(numCellsX, printV, hx, outNumber);
+            //Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+            //Write2VTK_noGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
             //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
             //}
             //}
