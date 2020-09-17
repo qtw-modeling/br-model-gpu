@@ -306,8 +306,8 @@ int main(int argc, char** argv) {
 
     // we pass number of cells as command line args; 
     // reading the params from the console:
-    int numSegmentsX = atoi(argv[1]) + 1;
-    int numSegmentsY = atoi(argv[2]) + 1;
+    int numCellsX = atoi(argv[1]);
+    int numCellsY = atoi(argv[2]);
     //int serieOfLaunchesNum = atoi(argv[3]);
     const int T = atoi(argv[3]);
 
@@ -315,8 +315,8 @@ int main(int argc, char** argv) {
     /* string */ char tmp_output_file[256];
     sprintf(tmp_output_file, argv[4]);
     
-    int numPointsX = numSegmentsX + 1; // includes 2 ghost cells; numCells + 2 = numPointsX
-    int numPointsY = numSegmentsY + 1; // same
+    int numPointsX = numCellsX + 2; // includes 2 ghost cells; numCells + 2 = numPointsX
+    int numPointsY = numCellsY + 2; // same
 
     int numPointsTotal = numPointsX * numPointsY;
 
@@ -442,11 +442,11 @@ deviceptr(tmp, tmpConc)
     // loop over inner cells
 	//#pragma acc loop independent vector(32) worker(2) gang(256)
     #pragma acc loop gang // as many gangs (= blocks) as needed
-    for (int j = 1; j < numPointsY - 1; j++)
+    for (int j = 1; j <= numPointsY - 1; j++)
     {       
         //#pragma acc loop independent vector(32) worker(2) gang(256)
         #pragma acc loop vector
-        for (int i = 1; i < numPointsX - 1; i++)
+        for (int i = 1; i <= numPointsX - 1; i++)
         {
 
             int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
@@ -544,10 +544,10 @@ deviceptr(tmp, tmpConc)
                     for (int j = 1; j < numPointsY - 1; j++)
                     {
                         int idxCenterLeftBord = CalculateLinearCoordinate(0, j, numPointsX);
-                        int idxCenterRightBord = CalculateLinearCoordinate(numSegmentsX, j, numPointsX);
+                        int idxCenterRightBord = CalculateLinearCoordinate(numPointsX - 1, j, numPointsX);
                         
                         int idxNearLeft = CalculateLinearCoordinate(1, j, numPointsX);
-                        int idxNearRight = CalculateLinearCoordinate(numSegmentsX - 1, j, numPointsX);
+                        int idxNearRight = CalculateLinearCoordinate(numPointsX - 1 - 1, j, numPointsX);
 
                         VNew[idxCenterLeftBord] = VNew[idxNearLeft];
                         VNew[idxCenterRightBord] = VNew[idxNearRight];
@@ -561,10 +561,10 @@ deviceptr(tmp, tmpConc)
                     for (int i = 1; i < numPointsX - 1; i++)
                     {
                         int idxCenterBottomBord = CalculateLinearCoordinate(i, 0, numPointsX);
-                        int idxCenterTopBord = CalculateLinearCoordinate(i, numSegmentsY, numPointsX);
+                        int idxCenterTopBord = CalculateLinearCoordinate(i, numPointsY - 1, numPointsX);
                         
                         int idxNearBottom = CalculateLinearCoordinate(i, 1, numPointsX);
-                        int idxNearTop = CalculateLinearCoordinate(i, numSegmentsY - 1, numPointsX);
+                        int idxNearTop = CalculateLinearCoordinate(i, numPointsY - 1 - 1, numPointsX);
 
                         VNew[idxCenterBottomBord] = VNew[idxNearBottom];
                         VNew[idxCenterTopBord] = VNew[idxNearTop];
@@ -634,11 +634,12 @@ deviceptr(tmp, tmpConc)
                 
             //if (variable.first.compare("V") == 0 ) // output only "V"
             //{
-            Write2VTK(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+            Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+            Write2VTKNoGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
             //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
             //}
             //}
-            printf("Progress: %.2f %% completed\n", 100.*stepNumber*dt/T);
+            printf("Progress: %.2f %% completed;\n", 100.*stepNumber*dt/T);
 	        counterOutput++;
         }
         
@@ -670,7 +671,7 @@ deviceptr(tmp, tmpConc)
 } // acc data
 
     real elapsedTime = (real)( ((real)(clock() - start))/CLOCKS_PER_SEC );
-    printf("\nCalculations finished. Elapsed time = %.2e sec\n", elapsedTime);
+    printf("\nCalculations finished. Elapsed time = %.2e sec.\n", elapsedTime);
 
     // printing elapsed time into a file
     FILE* ff = fopen(tmp_output_file, "w");
