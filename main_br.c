@@ -456,6 +456,8 @@ int main(int argc, char** argv) {
     clock_t start = clock();
 
 // pragmas without "-acc" flag --- are ignored?
+// create(printV[0:numCellsTotal]) --- note this pragma if you decide to slice ghost cells in GPU kernel 
+
 #pragma acc data copy(VOld[0:numPointsTotal], mOld[0:numPointsTotal], hOld[0:numPointsTotal], \
 JOld[0:numPointsTotal], dOld[0:numPointsTotal], fOld[0:numPointsTotal], xOld[0:numPointsTotal], \
 INaOld[0:numPointsTotal], IKOld[0:numPointsTotal], IXOld[0:numPointsTotal], ISOld[0:numPointsTotal], \
@@ -463,7 +465,6 @@ concCaOld[0:numPointsTotal], \
 VNew[0:numPointsTotal], mNew[0:numPointsTotal], hNew[0:numPointsTotal], \
 JNew[0:numPointsTotal], dNew[0:numPointsTotal], fNew[0:numPointsTotal], xNew[0:numPointsTotal], \
 concCaNew[0:numPointsTotal]) \
-create(printV[0:numCellsTotal]) \
 deviceptr(tmp, tmpConc)
 {
     // main loop: timestepping
@@ -480,7 +481,7 @@ deviceptr(tmp, tmpConc)
     VNew[0:numPointsTotal], mNew[0:numPointsTotal], hNew[0:numPointsTotal], \
     JNew[0:numPointsTotal], dNew[0:numPointsTotal], fNew[0:numPointsTotal], xNew[0:numPointsTotal], \
     concCaNew[0:numPointsTotal]) \
-    vector_length(32) num_workers(1) //num_gangs(32)
+    //vector_length(32) num_workers(1) //num_gangs(32)
 	{
 	
     // loop over inner cells
@@ -661,19 +662,20 @@ deviceptr(tmp, tmpConc)
     
     if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
     { 
+        /*
         #pragma acc parallel \
         present(VOld[0:numPointsTotal], printV[0:numCellsTotal])
         {
             SliceGhosts2D(numPointsX, numPointsY, VOld, printV);
         }
-        
+        */
         // output each 10 msec: 10/dt = 2000 (old val.)
         //if ( (stepNumber) % (int)(T/dt/500)  == 0 ) {
-        #pragma acc update host(printV[0:numCellsTotal]) // (VOld[0:numPointsTotal])
+        #pragma acc update host(VOld[0:numPointsTotal])
             
             //variablesOld[V_] = printV;
             
-            //variablesOld[V_] = VOld;
+            variablesOld[V_] = VOld;
             //variablesOld[m_] = mOld;
             //variablesOld[h_] = hOld;
             //variablesOld[J_] = JOld;
@@ -693,9 +695,9 @@ deviceptr(tmp, tmpConc)
             //if (variable.first.compare("V") == 0 ) // output only "V"
             //{
             
-            Write2VTK(numCellsX, printV, hx, outNumber);
+            //Write2VTK_2D(numCellsX, printV, hx, outNumber);
             //Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
-            //Write2VTK_noGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+            Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
             //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
             //}
             //}

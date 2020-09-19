@@ -1,7 +1,7 @@
 #include "extra.h"
 
 
-void Write2VTK(const int n, real* p, const real h, const int step)
+void Write2VTK_2D(const int n, real* p, const real h, const int step)
 {
     char fn[256];
     sprintf(fn, "./output/V.%d.vtk", step); 
@@ -70,7 +70,7 @@ void Write2VTK(const int n, real* p, const real h, const int step)
     */
 }
 
-void Write2VTK_noGhosts(const int n, real* p, const real h, const int step)
+void Write2VTK_2D_noGhosts(const int n, real* p, const real h, const int step)
 {
     char fn[256];
     sprintf(fn, "./output/VNoGhosts.%d.vtk", step); 
