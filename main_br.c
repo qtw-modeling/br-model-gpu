@@ -185,7 +185,6 @@ real TotalIonCurrent(int idx, real V, real m, real h, real j, real d, real f, re
     IX[idx] = CurrentX(V, x);
     IS[idx] = CurrentS(V, d, f, concCa);
 
-    // TODO: check the sign of the expression below
     return -(INa[idx] + IK[idx] + IX[idx] + IS[idx]);
 }
 
@@ -303,7 +302,6 @@ real* x, real* concCa, real value, int numPointsX, int numPointsY)
 
 
     // after filling the whole area: "fill" borders wiht Neumann boundary cond.
-    // the borders: Neumann boundary conditions
     for (int j = 0; j < numPointsY; j++)
         for (int i = 0; i < numPointsX; i++)
         {
@@ -323,7 +321,6 @@ real* x, real* concCa, real value, int numPointsX, int numPointsY)
                 if ((i == numPointsX - 1)) // && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
                     idxNear = CalculateLinearCoordinate_CPU(i - 1, j, numPointsX);
 
-                // what about corner cells? for now, they are not treated (?)
                 V[idxCenter] = V[idxNear];
                 m[idxCenter] = m[idxNear];
                 h[idxCenter] = h[idxNear];
@@ -339,27 +336,27 @@ real* x, real* concCa, real value, int numPointsX, int numPointsY)
 
 
 
-int main(int argc, char** argv) {
+int main(int argc, char** argv) 
+{
 
     // setting a GPU for the computations; NOTE: req "openacc.h"!
-    //acc_set_device_num(1, acc_device_nvidia);
+    // acc_set_device_num(1, acc_device_nvidia);
 
     // we pass number of cells as command line args; 
     // reading the params from the console:
-    int numCellsX = atoi(argv[1]);
-    int numCellsY = atoi(argv[2]);
+    const char* numCellsX_s = argv[1];
+    int numCellsX = atoi(numCellsX_s); // atoi(argv[1]);
+    int numCellsY = numCellsX; // atoi(argv[2]);
     int numCellsTotal = numCellsX*numCellsY;
-    //int serieOfLaunchesNum = atoi(argv[3]);
-    
-    const int T = atoi(argv[3]);
-
-    // storing output file's name in char[]
-    /* string */ char tmp_output_file[256];
-    sprintf(tmp_output_file, argv[4]);
-    
+    // int serieOfLaunchesNum = atoi(argv[3]);
     int numPointsX = numCellsX + 2; // includes 2 ghost cells; numCells + 2 = numPointsX
     int numPointsY = numCellsY + 2; // same
     int numPointsTotal = numPointsX * numPointsY;
+
+
+    const char* T_s = argv[2];
+    const real T = atof(T_s); // atoi(argv[2]);
+
 
     // allocating memory
     
@@ -444,7 +441,7 @@ int main(int argc, char** argv) {
     // = {"V", "m", "h", "J", "d", "f", "x"};
 
 
-    // initializing before timesteppin'
+    // initializing before timestepping
     SetInitialConditions_CPU(VOld, mOld, hOld, JOld, dOld, fOld, xOld, concCaOld, 0., numPointsX, numPointsY);
     //SetInitialConditions_CPU(VNew, mNew, hNew, JNew, dNew, fNew, xNew, concCaOld, 0., numPointsX, numPointsY); // for avoiding "junk" values in all '...New' arrays
 
@@ -455,9 +452,8 @@ int main(int argc, char** argv) {
     printf("Timesteppin' begins...\n");
     clock_t start = clock();
 
-// pragmas without "-acc" flag --- are ignored?
-// create(printV[0:numCellsTotal]) --- note this pragma if you decide to slice ghost cells in GPU kernel 
 
+// create(printV[0:numCellsTotal]) --- note this pragma if you decide to slice ghost cells in GPU kernel 
 #pragma acc data copy(VOld[0:numPointsTotal], mOld[0:numPointsTotal], hOld[0:numPointsTotal], \
 JOld[0:numPointsTotal], dOld[0:numPointsTotal], fOld[0:numPointsTotal], xOld[0:numPointsTotal], \
 INaOld[0:numPointsTotal], IKOld[0:numPointsTotal], IXOld[0:numPointsTotal], ISOld[0:numPointsTotal], \
@@ -470,10 +466,7 @@ deviceptr(tmp, tmpConc)
     // main loop: timestepping
     while (tCurrent < T) 
     {
-
-        // TODO: change order of indexing (i, j)
     
-    // dont forget to try "kernels" keyword
 	#pragma acc parallel \
 	present(VOld[0:numPointsTotal], mOld[0:numPointsTotal], hOld[0:numPointsTotal], \
     JOld[0:numPointsTotal], dOld[0:numPointsTotal], fOld[0:numPointsTotal], xOld[0:numPointsTotal], \
@@ -481,25 +474,21 @@ deviceptr(tmp, tmpConc)
     VNew[0:numPointsTotal], mNew[0:numPointsTotal], hNew[0:numPointsTotal], \
     JNew[0:numPointsTotal], dNew[0:numPointsTotal], fNew[0:numPointsTotal], xNew[0:numPointsTotal], \
     concCaNew[0:numPointsTotal]) \
-    //vector_length(32) num_workers(1) //num_gangs(32)
+    vector_length(32) num_workers(1) // num_gangs(32)
 	{
 	
     // loop over inner cells
-	//#pragma acc loop independent vector(32) worker(2) gang(256)
     #pragma acc loop gang // as many gangs (= blocks) as needed
     for (int j = 1; j <= numPointsY - 1; j++)
     {       
-        //#pragma acc loop independent vector(32) worker(2) gang(256)
         #pragma acc loop vector
         for (int i = 1; i <= numPointsX - 1; i++)
         {
 
             int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
                 
-            // inner cells
-            //if (i >= 1 && j >= 1 && i <= (numSegmentsX - 1) && j <= (numSegmentsY - 1))
-            //{
-                    // for short names
+            
+            // for short names
             int idxUp = CalculateLinearCoordinate(i, j + 1, numPointsX);
             int idxDown = CalculateLinearCoordinate(i, j - 1, numPointsX);
             int idxLeft = CalculateLinearCoordinate(i - 1, j, numPointsX);
@@ -530,16 +519,11 @@ deviceptr(tmp, tmpConc)
                                                                 * exp(-dt * (alpha_x(VOld[idxCenter]) + beta_x(VOld[idxCenter])));
                     
                     
-            /*
-            // for steady state's calculation
-            VNew[idxCenter] = VRest;
-            */
-
                     
             //////////////////
             // "discrete diffusion" step
             VNew[idxCenter] = VOld[idxCenter]
-            // uncomment if cells are connected; otherwize --- Nans
+    
                      + dt / Cm * (
                             Dx  * (VOld[idxRight] - 2 * VOld[idxCenter] + VOld[idxLeft])
                             + Dy  * (VOld[idxUp] - 2 * VOld[idxCenter] + VOld[idxDown])
@@ -549,20 +533,12 @@ deviceptr(tmp, tmpConc)
                                                              hOld[idxCenter], JOld[idxCenter], 
                                                              dOld[idxCenter], fOld[idxCenter], xOld[idxCenter],
                                                             INaOld, IKOld, IXOld, ISOld, concCaOld[idxCenter])
-                                                                        /*+ 0.*IsStim(tCurrent)*I_Stim(i, j, 2.1)*/
+                                                                        + 0.*IsStim(tCurrent)*I_Stim(i, j, 2.1)
                                                 ); // "standart" I_stim = 1e0;
                     
                     
                     
-                    // reaction step
-                    /* VNew[idxCenter] +=  dt / Cm * (
-                                                        TotalIonCurrent(idxCenter, VOld[idxCenter], mOld[idxCenter],
-                                                             hOld[idxCenter], JOld[idxCenter], 
-                                                             dOld[idxCenter], fOld[idxCenter], xOld[idxCenter],
-                                                            INaOld, IKOld, IXOld, ISOld, concCaOld[idxCenter])
-                                                                        + IsStim(tCurrent)*I_Stim(i, j, 5.)
-                                                ); // "standart" I_stim = 1e0;
-                    */
+        
                     
             // concentrations calc
             concCaNew[idxCenter] = concCaOld[idxCenter] + dt * (
@@ -570,38 +546,38 @@ deviceptr(tmp, tmpConc)
                                                             + 0.07*(1e-7 - concCaOld[idxCenter]) 
                                                             ); // index "0" --- for array of length 1
                     
-            //   } // if
+            
         } // for i
     } // for j
 
     } // acc parallel 4 inner cells
 
             
-            // setting Neumann BCs, NEW VERS;
+            // setting Neumann BCs; 
             // corner cells are not treated. 
                 //#pragma acc parallel async(0) \
                 //present(VNew[0:numPointsTotal])
                 //{
-                    #pragma acc parallel async(0) \
-                    present(VNew[0:numPointsTotal])
-                    {
+                #pragma acc parallel async(0) \
+                present(VNew[0:numPointsTotal])
+                {
                     #pragma acc loop vector // seq
                     for (int j = 1; j < numPointsY - 1; j++)
                     {
                         int idxCenterLeftBord = CalculateLinearCoordinate(0, j, numPointsX);
                         int idxCenterRightBord = CalculateLinearCoordinate(numPointsX - 1, j, numPointsX);
-                        
+                            
                         int idxNearLeft = CalculateLinearCoordinate(1, j, numPointsX);
                         int idxNearRight = CalculateLinearCoordinate(numPointsX - 1 - 1, j, numPointsX);
 
                         VNew[idxCenterLeftBord] = VNew[idxNearLeft];
                         VNew[idxCenterRightBord] = VNew[idxNearRight];
                     }
-                    }
+                }
 
-                    #pragma acc parallel async(1) \
-                    present(VNew[0:numPointsTotal])
-                    {
+                #pragma acc parallel async(1) \
+                present(VNew[0:numPointsTotal])
+                {
                     #pragma acc loop vector // seq
                     for (int i = 1; i < numPointsX - 1; i++)
                     {
@@ -614,51 +590,12 @@ deviceptr(tmp, tmpConc)
                         VNew[idxCenterBottomBord] = VNew[idxNearBottom];
                         VNew[idxCenterTopBord] = VNew[idxNearTop];
                     }
-                    }
+                }
                 
                 #pragma acc wait(0, 1)
 
 
-
-                /*
-               // the borders: Neumann boundary conditions, OLD VERS
-                #pragma acc loop gang
-	            for (int j = 0; j < numPointsY; j++)
-                {
-                    #pragma acc loop vector
-                    for (int i = 0; i < numPointsX; i++) 
-                    {
-                        int idxCenter = CalculateLinearCoordinate(i, j, numPointsX);
-                        int idxNear;
-                        
-                        if ((i == 0) && (j >= 1) && (j <= numSegmentsY - 1)) // left border, except for corner cells
-                            idxNear = CalculateLinearCoordinate(i + 1, j, numPointsX);
-                        else if ((j == 0) && (i >= 1) && (i <= numSegmentsX - 1)) // bottom, except for corner cells
-                            idxNear = CalculateLinearCoordinate(i, j + 1, numPointsX);
-                        else if ((j == numSegmentsY) && (i >= 1) && (i <= numSegmentsX - 1)) // top, except for corner cells
-                            idxNear = CalculateLinearCoordinate(i, j - 1, numPointsX);
-                        else if ((i == numSegmentsX) && (j >= 1) && (j <= numSegmentsY - 1)) // right, except for corner cells
-                            idxNear = CalculateLinearCoordinate(i - 1, j, numPointsX);
-                        else { // if corner cell
-                            continue; // do nothing, continue the "i,j" loop
-                        }
-
-                        // what about corner cells? for now, they are not treated (?)
-                        // Neumann boundary cond setting;
-                        // we need only set BC for V, not other vars?
-                        VNew[idxCenter] = VNew[idxNear];
-                        //mNew[idxCenter] = mNew[idxNear];
-                        //hNew[idxCenter] = hNew[idxNear];
-                        //JNew[idxCenter] = JNew[idxNear];
-                        //dNew[idxCenter] = dNew[idxNear];
-                        //fNew[idxCenter] = fNew[idxNear];
-                        //xNew[idxCenter] = xNew[idxNear];
-                        //concCaNew[idxCenter] = concCaNew[idxNear];
-                    } // for i
-                } // for j
-                */
-
-	//} // acc parallel 4 inner cells
+	// } // acc parallel 4 inner cells
     
     if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
     { 
@@ -669,41 +606,36 @@ deviceptr(tmp, tmpConc)
             SliceGhosts2D(numPointsX, numPointsY, VOld, printV);
         }
         */
+
         // output each 10 msec: 10/dt = 2000 (old val.)
-        //if ( (stepNumber) % (int)(T/dt/500)  == 0 ) {
-        #pragma acc update host(VOld[0:numPointsTotal])
+        #pragma acc update host(VOld[0:numPointsTotal]) // async(3) --- this results in an error
             
-            //variablesOld[V_] = printV;
+        //variablesOld[V_] = printV;
             
-            variablesOld[V_] = VOld;
-            //variablesOld[m_] = mOld;
-            //variablesOld[h_] = hOld;
-            //variablesOld[J_] = JOld;
-            //variablesOld[d_] = dOld;
-            //variablesOld[f_] = fOld;
-            //variablesOld[x_] = xOld;
-            //variablesOld[INa_] = INaOld;
-            //variablesOld[IK_] = IKOld;
-            //variablesOld[IX_] = IXOld;
-            //variablesOld[IS_] = ISOld;
-            //variablesOld[concCa_] = concCaOld;
+        variablesOld[V_] = VOld;
+        //variablesOld[m_] = mOld;
+        //variablesOld[h_] = hOld;
+        //variablesOld[J_] = JOld;
+        //variablesOld[d_] = dOld;
+        //variablesOld[f_] = fOld;
+        //variablesOld[x_] = xOld;
+        //variablesOld[INa_] = INaOld;
+        //variablesOld[IK_] = IKOld;
+        //variablesOld[IX_] = IXOld;
+        //variablesOld[IS_] = ISOld;
+        //variablesOld[concCa_] = concCaOld;
 
-            //real* printV = SliceGhosts2D(numPointsX, numPointsY, variablesOld[V_]);
+        //real* printV = SliceGhosts2D(numPointsX, numPointsY, variablesOld[V_]);
 
-            int outNumber = stepNumber;
+        int outNumber = stepNumber;
                 
-            //if (variable.first.compare("V") == 0 ) // output only "V"
-            //{
-            
-            //Write2VTK_2D(numCellsX, printV, hx, outNumber);
-            //Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
-            Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
-            //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
-            //}
-            //}
-            printf("Progress: %.2f %% completed;\n", 100.*stepNumber*dt/T);
-	        counterOutput++;
-        }
+        //Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+        Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+        //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
+
+        printf("Progress: %.2f %% completed;\n", 100.*stepNumber*dt/T);
+	    counterOutput++;
+    }
         
         tCurrent += dt;
         stepNumber += 1;
@@ -735,11 +667,20 @@ deviceptr(tmp, tmpConc)
     real elapsedTime = (real)( ((real)(clock() - start))/CLOCKS_PER_SEC );
     printf("\nCalculations finished. Elapsed time = %.2e sec.\n", elapsedTime);
 
+
+    // OUTPUT: elapsed time
+    // storing output file's name in char[]
+    /* string */ // char tmp_output_file[256];
+    // sprintf(tmp_output_file, argv[4]);
+    char* outFile4Timing = concat( concat(concat(concat("timing_dim_", numCellsX_s), "x"), numCellsX_s), 
+                            concat(concat("_cells_T_", T_s), "_ms.txt"));
+
     // printing elapsed time into a file
-    FILE* ff = fopen(tmp_output_file, "w");
-    fprintf(ff, "%.2f", elapsedTime);
+    FILE* ff = fopen(concat("./timings/", outFile4Timing), "w"); // "timings" --- folder name
+    fprintf(ff, "%.6e", elapsedTime); // in sec.
     fclose(ff);
     
+
     // cleaning up
     for (int i = 0; i < NUM_VARS; i++)
     {
