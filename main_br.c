@@ -20,8 +20,8 @@
 //#define numPointsX (numSegmentsX + 1) // = numCells
 //#define numPointsY (numSegmentsY + 1) // = numCells
 //#define numPointsTotal (numPointsX * numPointsY)
-#define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
-#define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
+//#define hx 0.07 //1. // uncomment if cells are connected // (1./numSegmentsX)
+//#define hy 0.07 //1. // uncomment if cells are connected // (1./numSegmentsY)
 //#define T (25.) //(1000.) // old val: 500 // endtime (in ms)
 #define dt 0.005 // old val = 1e-4 // timestep (in ms)
 
@@ -35,8 +35,17 @@
 #define c0 (0.01*1e-7) // concentration initial
 
 // tissue parameters
-#define Dx (50e-3) // 30e-3 --- ok for reentry
-#define Dy (50e-3) // 30e-3 --- ok for reentry
+#define CELL_SIZE (0.07) // in cm??
+
+#define GX (0.9e-3) // conductivity between cells 
+#define GY (0.9e-3) // conductivity between cells
+
+#define DX (GX/CELL_SIZE) // diffusion coeff // (50e-3) // 30e-3 --- ok for reentry 
+#define DY (GX/CELL_SIZE) // diffusion coeff // (50e-3) // 30e-3 --- ok for reentry
+
+
+#define AREA_SIZE_X (70.) // should be in cm
+#define AREA_SIZE_Y (70.) // should be in cm
 
 // Currents are in the end of enum: "concCa" is a state var, and should be before Currents for correct enum numbering usage
 enum vars {V_, m_, h_, J_, d_, f_, x_, concCa_, INa_, IK_, IX_, IS_};
@@ -244,7 +253,7 @@ real* CalculateStateFromFile(real phase)
 
 
 void SetInitialConditions_CPU(real* V, real* m, real* h, real* J, real* d, real* f, 
-real* x, real* concCa, real value, int numPointsX, int numPointsY) 
+real* x, real* concCa, real value, int numPointsX, int numPointsY, real hx, real hy) 
 {
     int idx;
 
@@ -353,9 +362,11 @@ int main(int argc, char** argv)
     int numPointsY = numCellsY + 2; // same
     int numPointsTotal = numPointsX * numPointsY;
 
+    real hx = AREA_SIZE_X / (numPointsX - 1);
+    real hy = AREA_SIZE_Y / (numPointsY - 1);
 
     const char* T_s = argv[2];
-    const real T = atof(T_s); // atoi(argv[2]);
+    const int T = atoi(T_s); // atoi(argv[2]);
 
 
     // allocating memory
@@ -442,7 +453,7 @@ int main(int argc, char** argv)
 
 
     // initializing before timestepping
-    SetInitialConditions_CPU(VOld, mOld, hOld, JOld, dOld, fOld, xOld, concCaOld, 0., numPointsX, numPointsY);
+    SetInitialConditions_CPU(VOld, mOld, hOld, JOld, dOld, fOld, xOld, concCaOld, 0., numPointsX, numPointsY, hx, hy);
     //SetInitialConditions_CPU(VNew, mNew, hNew, JNew, dNew, fNew, xNew, concCaOld, 0., numPointsX, numPointsY); // for avoiding "junk" values in all '...New' arrays
 
     real tCurrent = 0.;
@@ -525,8 +536,8 @@ deviceptr(tmp, tmpConc)
             VNew[idxCenter] = VOld[idxCenter]
     
                      + dt / Cm * (
-                            Dx  * (VOld[idxRight] - 2 * VOld[idxCenter] + VOld[idxLeft])
-                            + Dy  * (VOld[idxUp] - 2 * VOld[idxCenter] + VOld[idxDown])
+                            DX / (hx*hx)  * (VOld[idxRight] - 2 * VOld[idxCenter] + VOld[idxLeft])
+                            + DY / (hy*hy)  * (VOld[idxUp] - 2 * VOld[idxCenter] + VOld[idxDown])
                                 )
                     + dt / Cm * (
                                                         TotalIonCurrent(idxCenter, VOld[idxCenter], mOld[idxCenter],
@@ -597,7 +608,7 @@ deviceptr(tmp, tmpConc)
 
 	// } // acc parallel 4 inner cells
     
-    if ((stepNumber % 2000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.)
+    if ((stepNumber % 1000) == 0) // output each 10 msec: 10/dt(=0.005 ms) = 2000 (old val.); each 5 ms: 5/dt = 1000
     { 
         /*
         #pragma acc parallel \
@@ -612,7 +623,7 @@ deviceptr(tmp, tmpConc)
             
         //variablesOld[V_] = printV;
             
-        variablesOld[V_] = VOld;
+        //variablesOld[V_] = VOld;
         //variablesOld[m_] = mOld;
         //variablesOld[h_] = hOld;
         //variablesOld[J_] = JOld;
@@ -630,10 +641,10 @@ deviceptr(tmp, tmpConc)
         int outNumber = stepNumber;
                 
         //Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
-        Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
+        Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber, V_); // for now: numPointsX == numPointsY
         //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
 
-        printf("Progress: %.2f %% completed;\n", 100.*stepNumber*dt/T);
+        printf("Progress: %.2f %% completed\n", 100.*stepNumber*dt/T);
 	    counterOutput++;
     }
         

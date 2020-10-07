@@ -83,14 +83,10 @@ real CurrentNa(real V, real m, real h, real J)
     //real ENernst = 30.;
     //real gMax = 120.;
 
-    // TODO: check sign;
-    // the formula below --- according to the original article of YNI model
-    //return m * m * m * h * 0.5 * (V - 30.);
+    //return 15.*m*m*m*h*(V - 40.);
 
-
-    //return (4.* m * m * m * h * J + /* NaCa exchanger*/ 0.003)*(V - 50.); // formula from original BR-model article
+    return (4.* m * m * m * h * J + /* NaCa exchanger*/ 0.003) * (V - 50.); // formula from original BR-model article
 
     // gNa = 23 (the val. described in A.Tveito's article on FDM for BL-model ) instead of old val. gNa = 4;
-    return (23. * m * m * m * h * J + /* NaCa exchanger*/ 0.003) * (V - 50.);
-    //return 15.*m*m*m*h*(V - 40.);
+    //return (/* 23. */ 10. * m * m * m * h * J + /* NaCa exchanger*/ 0.003) * (V - 50.);
 }
