@@ -1,3 +1,6 @@
+#ifndef __CURRENT_NA_H
+#define __CURRENT_NA_H
+
 #include "common.h"
 
 #pragma acc routine
@@ -24,3 +27,5 @@ real j_inf(real V);
 
 #pragma acc routine
 real CurrentNa(real V, real m, real h, real j);
+
+#endif

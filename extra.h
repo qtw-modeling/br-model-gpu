@@ -6,7 +6,7 @@
 #include <string.h>
 
 char* concat(const char *s1, const char *s2);
-void Write2VTK(const int n, real* p, const real h, const int step);
+void Write2VTK_2D_noGhosts(const int n, real* p, const real h, const int step, int varNum);
 real CalculateLinearInterpolate(real x, real xL, real xR, real yL, real yR);
 
 #endif __EXTRA_H

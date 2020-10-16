@@ -6,6 +6,7 @@
 #include <math.h>
 #include <time.h>
 #include <stdbool.h>
+#include <string.h>
 
 
 #define M_PI acos(-1.)

@@ -1,4 +1,6 @@
-#pragma once
+#ifndef __STATE_H
+#define __STATE_H
+
 #include "common.h"
 
 // main (independent) variables 
@@ -16,3 +18,5 @@ struct Currents {
 struct Concentrations {
     real Ca;
 };
+
+#endif
