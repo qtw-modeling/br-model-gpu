@@ -40,12 +40,12 @@
 #define GX (0.9e-3) // conductivity between cells 
 #define GY (0.9e-3) // conductivity between cells
 
-#define DX (GX/CELL_SIZE) // diffusion coeff // (50e-3) // 30e-3 --- ok for reentry 
-#define DY (GX/CELL_SIZE) // diffusion coeff // (50e-3) // 30e-3 --- ok for reentry
+#define DX (5.5e-4) // (7.6e-4) // (GX/CELL_SIZE/Cm) // diffusion coeff // (50e-3) // 30e-3 --- ok for reentry 
+#define DY (5.5e-4) // (3.8e-4) // (GX/CELL_SIZE/Cm) // diffusion coeff // (50e-3) // 30e-3 --- ok for reentry
 
 
-#define AREA_SIZE_X (70.) // should be in cm
-#define AREA_SIZE_Y (70.) // should be in cm
+#define AREA_SIZE_X (10.) // (10.) // should be in cm
+#define AREA_SIZE_Y (10.) // (10.) // should be in cm
 
 // Currents are in the end of enum: "concCa" is a state var, and should be before Currents for correct enum numbering usage
 enum vars {V_, m_, h_, J_, d_, f_, x_, concCa_, INa_, IK_, IX_, IS_};
@@ -516,9 +516,12 @@ deviceptr(tmp, tmpConc)
             hNew[idxCenter] = h_inf(VOld[idxCenter]) + (hOld[idxCenter] - h_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_h(VOld[idxCenter]) + beta_h(VOld[idxCenter])));
                     
+            
+            /* 
+            // there is no "J"-gating var. in BR-DR model
             JNew[idxCenter] = j_inf(VOld[idxCenter]) + (JOld[idxCenter] - j_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_j(VOld[idxCenter]) + beta_j(VOld[idxCenter])));
-                   
+            */       
 
             dNew[idxCenter] = d_inf(VOld[idxCenter]) + (dOld[idxCenter] - d_inf(VOld[idxCenter]))
                                                                 * exp(-dt * (alpha_d(VOld[idxCenter]) + beta_d(VOld[idxCenter])));
@@ -532,10 +535,10 @@ deviceptr(tmp, tmpConc)
                     
                     
             //////////////////
-            // "discrete diffusion" step
+            // Euler step
             VNew[idxCenter] = VOld[idxCenter]
     
-                     + dt / Cm * (
+                     + dt * (
                             DX / (hx*hx)  * (VOld[idxRight] - 2 * VOld[idxCenter] + VOld[idxLeft])
                             + DY / (hy*hy)  * (VOld[idxUp] - 2 * VOld[idxCenter] + VOld[idxDown])
                                 )
@@ -639,9 +642,10 @@ deviceptr(tmp, tmpConc)
         //real* printV = SliceGhosts2D(numPointsX, numPointsY, variablesOld[V_]);
 
         int outNumber = stepNumber;
-                
+            
+        Write2VTK_2D(numPointsX, variablesOld[V_], hx, outNumber, V_); // for now: numPointsX == numPointsY    
         //Write2VTKWithGhosts(numPointsX, variablesOld[V_], hx, outNumber); // for now: numPointsX == numPointsY
-        Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber, V_); // for now: numPointsX == numPointsY
+        //Write2VTK_2D_noGhosts(numPointsX, variablesOld[V_], hx, outNumber, V_); // for now: numPointsX == numPointsY
         //Write2VTK("V", numPointsX, variablesOld["V"], hx, counterOutput); // for now: numPointsX == numPointsY
 
         printf("Progress: %.2f %% completed\n", 100.*stepNumber*dt/T);
