@@ -1,4 +1,5 @@
 # br_model
+Beeler-Reuter (1977) ionic model of the ventricular cell (guinea pig).
 
 A repo containing GPU-code (OpenACC) for numerical simulation of myocardium tissue using the Beeler-Reuter (1977) ionic model.
 
