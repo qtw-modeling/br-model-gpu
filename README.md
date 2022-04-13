@@ -1,11 +1,10 @@
 # br_model
-BR: Beeler-Reuter (1977) ionic model of a ventricular cell (guinea pig).
 
-GPU-code (OpenACC) for the numerical simulation of a myocardium tissue.
+GPU-code (OpenACC) for numerical simulation of myocardium tissue using the Beeler-Reuter (1977) ionic model.
 
 Model of the tissue: 
-- 2D 
-- constant gap junctions' conductivities 
+- 2D
+- gap junctions' conductivities = const
 - 1 type of cardiomyocytes present.
 
-Both discrete and continious media (i.e. "reaction-diffusion" or "cable equation") versions are feasible.
+Calculations of both discrete and continious media's (i.e. reaction-diffusion/cable equation) models are feasible.
